@@ -9,6 +9,7 @@ app/build/
 edge_profile/
 edge_temp/
 *.log
+github_push.bat
 
 # IDE & Editor Files
 .idea/
