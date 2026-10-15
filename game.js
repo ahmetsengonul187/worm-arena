@@ -1794,17 +1794,22 @@ class WormArenaGame {
     return newFood;
   }
 
-  validatePlayerName() {
+  validatePlayerName(autoGenerateIfEmpty = false) {
     const nameInput = document.getElementById('playerNameInput');
-    const name = nameInput ? nameInput.value.trim() : '';
+    let name = nameInput ? nameInput.value.trim() : '';
     if (!name || name.length === 0) {
-      if (nameInput) {
-        nameInput.focus();
-        nameInput.classList.add('input-error-shake');
-        setTimeout(() => nameInput.classList.remove('input-error-shake'), 600);
+      if (autoGenerateIfEmpty) {
+        name = `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
+        if (nameInput) nameInput.value = name;
+      } else {
+        if (nameInput) {
+          nameInput.focus();
+          nameInput.classList.add('input-error-shake');
+          setTimeout(() => nameInput.classList.remove('input-error-shake'), 600);
+        }
+        window.showInGameAlert('Lütfen oyuna başlamadan önce oyuncu adınızı giriniz!', 'warning', '⚠️ İSİM GEREKLİ');
+        return null;
       }
-      window.showInGameAlert('Lütfen oyuna başlamadan önce oyuncu adınızı giriniz!', 'warning', '⚠️ İSİM GEREKLİ');
-      return null;
     }
     localStorage.setItem('worm_player_name', name);
     return name.substring(0, 14);
@@ -1864,7 +1869,7 @@ class WormArenaGame {
   }
 
   startMultiplayerClientGame() {
-    const playerName = this.validatePlayerName();
+    const playerName = this.validatePlayerName(true);
     if (!playerName) return;
 
     if (!this.validateSelectedSkin()) return;
@@ -3808,20 +3813,17 @@ class WormArenaGame {
 
   // Arkadaşlara gönderilecek doğrudan web katılım linki
   getInviteLink(code) {
-    let host = window.location.hostname;
-    const port = window.location.port ? `:${window.location.port}` : '';
+    const defaultPublicUrl = 'https://ahmetsengonul187.github.io/worm-arena';
 
-    // file:// veya localhost ise WhatsApp'ın tıklanabilir mavi link algılaması için IP adresi kullan
-    if (!host || host === 'localhost' || host === '127.0.0.1' || window.location.protocol === 'file:') {
-      host = '10.32.124.48';
+    // Eğer halihazırda canlı bir web sitesi veya GitHub Pages üzerindeyse o anki adresi kullan
+    if (window.location.protocol === 'https:' || (window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.startsWith('10.') && !window.location.hostname.startsWith('192.168.'))) {
+      const cleanPath = window.location.pathname.replace(/\/index\.html$/, '');
+      const basePath = cleanPath.endsWith('/') ? cleanPath : cleanPath + '/';
+      return `${window.location.origin}${basePath}?oda=${code}`;
     }
 
-    let pathname = '/index.html';
-    if (window.location.pathname && window.location.pathname.endsWith('.html') && !window.location.pathname.includes('android_asset')) {
-      pathname = window.location.pathname;
-    }
-
-    return `http://${host}${port || ':8080'}${pathname}?oda=${code}`;
+    // Android APK, yerel dosya veya emülatördeyse arkadaşların doğrudan tarayıcıdan/iPhone'dan açabilmesi için GitHub Pages linkini ver
+    return `${defaultPublicUrl}/?oda=${code}`;
   }
 
   // Sayfa açıldığında URL parametresinde (?oda=8532) varsa otomatik odaya bağlan
@@ -3832,6 +3834,11 @@ class WormArenaGame {
       if (roomCode && roomCode.trim().length > 0) {
         const cleanCode = roomCode.trim();
         setTimeout(() => {
+          const nameInput = document.getElementById('playerNameInput');
+          if (nameInput && !nameInput.value.trim()) {
+            nameInput.value = `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
+          }
+
           const multiplayerModal = document.getElementById('multiplayerModal');
           const tabJoinRoom = document.getElementById('tabJoinRoom');
           const joinRoomCodeInput = document.getElementById('joinRoomCodeInput');
