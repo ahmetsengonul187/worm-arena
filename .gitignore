@@ -1,0 +1,24 @@
+# Gradle & Android Build Outputs
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+
+# Browser test profiles & temporary files
+edge_profile/
+edge_temp/
+*.log
+
+# IDE & Editor Files
+.idea/
+.vscode/
+*.iml
+local.properties
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
