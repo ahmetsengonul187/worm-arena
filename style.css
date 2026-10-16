@@ -1117,41 +1117,237 @@ html, body {
   line-height: 1.35;
 }
 
+/* ==================== GELİŞMİŞ ÇOK OYUNCULU LOBİ & BEKLEME ODASI ==================== */
+.multiplayer-dialog {
+  max-width: 440px;
+}
+
 .lobby-players-box {
   text-align: left;
   margin-bottom: 12px;
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: 12px;
-  padding: 8px 12px;
+  background: rgba(10, 16, 32, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+  border-radius: 14px;
+  padding: 10px 14px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.lobby-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
 
 .lobby-title {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  display: block;
-  margin-bottom: 6px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--neon-cyan);
+  display: inline-block;
+  letter-spacing: 0.5px;
+}
+
+.lobby-live-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.5);
+  color: #34d399;
+  letter-spacing: 0.5px;
+}
+.lobby-live-badge.waiting {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.5);
+  color: #fbbf24;
 }
 
 .lobby-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-height: 90px;
+  gap: 6px;
+  max-height: 140px;
   overflow-y: auto;
+  padding-right: 2px;
 }
 
 .lobby-item {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: #fff;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 6px 10px;
+  transition: all 0.2s ease;
+}
+.lobby-item:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 .lobby-item.is-host {
-  color: var(--neon-gold);
+  border-color: rgba(255, 183, 0, 0.35);
+  background: rgba(255, 183, 0, 0.08);
+}
+
+.lobby-player-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.lobby-player-name {
+  flex: 1;
   font-weight: 700;
+  color: #f8fafc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lobby-item.is-host .lobby-player-name {
+  color: #ffe066;
+}
+
+.lobby-ready-badge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(16, 185, 129, 0.2);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  letter-spacing: 0.5px;
+}
+.lobby-ready-badge.leader {
+  background: rgba(255, 183, 0, 0.2);
+  color: #ffb700;
+  border-color: rgba(255, 183, 0, 0.4);
+}
+
+.lobby-host-hint {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  margin-top: 8px;
+  line-height: 1.35;
+}
+
+/* ==================== BEKLEME ODASI (CLIENT WAITING CARD) ==================== */
+.waiting-card {
+  position: relative;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 27, 75, 0.95));
+  border: 1.5px solid rgba(168, 85, 247, 0.45);
+  border-radius: 16px;
+  padding: 16px 14px;
+  margin-bottom: 14px;
+  text-align: center;
+  box-shadow: 0 8px 30px rgba(168, 85, 247, 0.2);
+  overflow: hidden;
+}
+
+.waiting-spinner-ring {
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 10px;
+  border: 3.5px solid rgba(168, 85, 247, 0.2);
+  border-top-color: #c084fc;
+  border-right-color: #38bdf8;
+  border-radius: 50%;
+  animation: waitingSpin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+@keyframes waitingSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.waiting-room-meta {
+  margin-bottom: 8px;
+}
+.waiting-room-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #c084fc;
+  letter-spacing: 1.5px;
+}
+.waiting-room-code {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 900;
+  letter-spacing: 5px;
+  color: #fbbf24;
+  text-shadow: 0 0 15px rgba(251, 191, 36, 0.5);
+}
+
+.waiting-pulse-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.waiting-pulse-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 10px #34d399;
+  animation: pulseDot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+
+.waiting-notice-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px dashed rgba(0, 240, 255, 0.3);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  text-align: left;
+}
+.waiting-notice-icon {
+  font-size: 1.1rem;
+}
+.waiting-notice-text {
+  font-size: 0.74rem;
+  color: #bae6fd;
+  line-height: 1.4;
+}
+
+.room-btn-danger {
+  width: 100%;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.35));
+  border: 1.2px solid rgba(239, 68, 68, 0.6);
+  border-radius: 12px;
+  padding: 10px;
+  color: #fca5a5;
+  font-family: var(--font-main);
+  font-weight: 800;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.room-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.45);
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+}
+.room-btn-danger:active {
+  transform: scale(0.97);
 }
 
 .room-option-row {

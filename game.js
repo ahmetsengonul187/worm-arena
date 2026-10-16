@@ -1825,6 +1825,16 @@ class WormArenaGame {
     return true;
   }
 
+  getPlayerName() {
+    const nameInput = document.getElementById('playerNameInput');
+    return (nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Oyuncu').substring(0, 14);
+  }
+
+  getSelectedSkinId() {
+    const skin = (typeof SKINS !== 'undefined' && SKINS[this.selectedSkinIndex]) ? SKINS[this.selectedSkinIndex] : null;
+    return skin ? skin.id : 'white_king';
+  }
+
   startGame(includeBots = true) {
     const playerName = this.validatePlayerName();
     if (!playerName) return;
@@ -1868,35 +1878,86 @@ class WormArenaGame {
     this.vibrate(30);
   }
 
-  startMultiplayerClientGame() {
+  // Host için çok oyunculu odayı başlatma
+  startMultiplayerHostGame(includeBots = true, spawnX = null, spawnY = null, spawnAngle = 0) {
     const playerName = this.validatePlayerName(true);
     if (!playerName) return;
 
-    if (!this.validateSelectedSkin()) return;
+    sounds.init();
+    const skin = SKINS[this.selectedSkinIndex] || SKINS[0];
+
+    const cx = spawnX !== null ? spawnX : (this.worldWidth / 2 + (Math.random() - 0.5) * 400);
+    const cy = spawnY !== null ? spawnY : (this.worldHeight / 2 + (Math.random() - 0.5) * 400);
+
+    this.player = new Worm(cx, cy, playerName, skin, false);
+    this.player.hat = this.equippedHat;
+    this.player.angle = spawnAngle;
+    this.player.targetAngle = spawnAngle;
+
+    this.bots = [];
+    if (includeBots) {
+      const botCount = 6;
+      for (let i = 0; i < botCount; i++) {
+        this.spawnBot(i);
+      }
+    }
+
+    this.state = 'PLAYING';
+    this.bestRank = 99;
+    this.startScreen.classList.add('hidden');
+    this.gameOverScreen.classList.add('hidden');
+    const multiplayerModal = document.getElementById('multiplayerModal');
+    if (multiplayerModal) multiplayerModal.classList.add('hidden');
+    if (this.joystickZone) this.joystickZone.classList.remove('hidden');
+
+    if (this.hudRoomBadge && this.network.roomCode) {
+      this.hudRoomBadge.classList.remove('hidden');
+      this.hudRoomCode.textContent = this.network.roomCode;
+    }
+
+    sounds.playSpecial();
+    this.vibrate(40);
+    if (window.showInGameAlert) {
+      window.showInGameAlert('🚀 Arena Başlatıldı! Hayatta Kal!', 'success', '🎮 OYUN BAŞLADI');
+    }
+  }
+
+  // İstemci için çok oyunculu oyunu başlatma
+  startMultiplayerClientGame(mySpawn = null) {
+    const playerName = this.validatePlayerName(true);
+    if (!playerName) return;
 
     sounds.init();
-    const skin = SKINS[this.selectedSkinIndex];
+    const skin = SKINS[this.selectedSkinIndex] || SKINS[0];
 
-    this.player = new Worm(
-      this.worldWidth / 2 + (Math.random() - 0.5) * 600,
-      this.worldHeight / 2 + (Math.random() - 0.5) * 600,
-      playerName,
-      skin,
-      false
-    );
+    const sx = mySpawn ? mySpawn.x : (this.worldWidth / 2 + (Math.random() - 0.5) * 400);
+    const sy = mySpawn ? mySpawn.y : (this.worldHeight / 2 + (Math.random() - 0.5) * 400);
+    const sa = mySpawn ? mySpawn.angle : 0;
+
+    this.player = new Worm(sx, sy, playerName, skin, false);
     this.player.hat = this.equippedHat;
+    this.player.angle = sa;
+    this.player.targetAngle = sa;
 
     this.bots = [];
     this.state = 'PLAYING';
+    this.bestRank = 99;
     this.startScreen.classList.add('hidden');
     this.gameOverScreen.classList.add('hidden');
+    const multiplayerModal = document.getElementById('multiplayerModal');
+    if (multiplayerModal) multiplayerModal.classList.add('hidden');
     if (this.joystickZone) this.joystickZone.classList.remove('hidden');
 
-    this.hudRoomBadge.classList.remove('hidden');
-    this.hudRoomCode.textContent = this.network.roomCode;
+    if (this.hudRoomBadge && this.network.roomCode) {
+      this.hudRoomBadge.classList.remove('hidden');
+      this.hudRoomCode.textContent = this.network.roomCode;
+    }
 
     sounds.playSpecial();
-    this.vibrate(30);
+    this.vibrate(40);
+    if (window.showInGameAlert) {
+      window.showInGameAlert('🚀 Arenaya Girildi! İyi Şanslar!', 'success', '🎮 OYUN BAŞLADI');
+    }
   }
 
   spawnBot(index) {
@@ -1985,10 +2046,10 @@ class WormArenaGame {
 
     // CLIENT MODU
     if (this.network.isMultiplayer && !this.network.isHost) {
-      this.network.sendPlayerInput(this.player.targetAngle, this.player.isBoosting);
+      this.network.sendThrottledInput(this.player.targetAngle, this.player.isBoosting);
 
-      this.camera.x += (this.player.x - window.innerWidth / 2 - this.camera.x) * 0.1;
-      this.camera.y += (this.player.y - window.innerHeight / 2 - this.camera.y) * 0.1;
+      this.camera.x += (this.player.x - window.innerWidth / 2 - this.camera.x) * 0.15;
+      this.camera.y += (this.player.y - window.innerHeight / 2 - this.camera.y) * 0.15;
 
       this.updateParticles();
       const allWorms = [this.player, ...this.network.remotePlayers.values()];
@@ -2037,7 +2098,10 @@ class WormArenaGame {
     if (this.state !== 'PLAYING') return;
 
     if (this.network.isMultiplayer && this.network.isHost) {
-      this.network.broadcastState(allWorms, newFoods, eatenIndices);
+      this.broadcastTickCounter = (this.broadcastTickCounter || 0) + 1;
+      if (this.broadcastTickCounter % 2 === 0) {
+        this.network.broadcastState(allWorms, newFoods, eatenIndices);
+      }
     }
 
     this.updateParticles();
@@ -3283,6 +3347,16 @@ class WormArenaGame {
     }
   }
 
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   initMultiplayerEvents() {
     const openFriendsRoomBtn = document.getElementById('openFriendsRoomBtn');
     const multiplayerModal = document.getElementById('multiplayerModal');
@@ -3290,33 +3364,123 @@ class WormArenaGame {
 
     const tabCreateRoom = document.getElementById('tabCreateRoom');
     const tabJoinRoom = document.getElementById('tabJoinRoom');
+    const roomTabsBar = document.getElementById('roomTabsBar');
     const createRoomContent = document.getElementById('createRoomTabContent');
     const joinRoomContent = document.getElementById('joinRoomTabContent');
+    const waitingRoomContent = document.getElementById('waitingRoomTabContent');
 
     const myRoomCodeEl = document.getElementById('myRoomCode');
     const copyCodeBtn = document.getElementById('copyCodeBtn');
+    const copyRoomLinkBtn = document.getElementById('copyRoomLinkBtn');
     const shareRoomLinkBtn = document.getElementById('shareRoomLinkBtn');
+    const openRoomLinkBtn = document.getElementById('openRoomLinkBtn');
+
     const lobbyList = document.getElementById('lobbyList');
     const lobbyCount = document.getElementById('lobbyCount');
+    const lobbyStatusBadge = document.getElementById('lobbyStatusBadge');
+    const hostPlayerNameLobby = document.getElementById('hostPlayerNameLobby');
     const startRoomGameBtn = document.getElementById('startRoomGameBtn');
+    const startRoomGameBtnText = document.getElementById('startRoomGameBtnText');
+    const botsInRoomToggle = document.getElementById('botsInRoomToggle');
+
     const joinRoomCodeInput = document.getElementById('joinRoomCodeInput');
     const joinRoomSubmitBtn = document.getElementById('joinRoomSubmitBtn');
     const joinStatusMsg = document.getElementById('joinStatusMsg');
-    const botsInRoomToggle = document.getElementById('botsInRoomToggle');
 
-    // Arkadaşlarla Oyna butonuna basınca pencereyi aç ve otomatik oda kodu + linki oluştur
+    const clientLobbyList = document.getElementById('clientLobbyList');
+    const clientLobbyCount = document.getElementById('clientLobbyCount');
+    const waitingHostName = document.getElementById('waitingHostName');
+    const waitingRoomCodeVal = document.getElementById('waitingRoomCodeVal');
+    const waitingStatusText = document.getElementById('waitingStatusText');
+    const clientLeaveRoomBtn = document.getElementById('clientLeaveRoomBtn');
+
+    // UI Lobi Listesini Render Etme Fonksiyonu
+    const renderLobbyPlayers = (players, roomCode) => {
+      if (this.network.isHost) {
+        // HOST GÖRÜNÜMÜ: Odaya gelen herkesi anlık liste olarak göster
+        if (lobbyList) {
+          lobbyList.innerHTML = '';
+          players.forEach((p) => {
+            const li = document.createElement('li');
+            li.className = p.isHost ? 'lobby-item is-host' : 'lobby-item';
+            li.innerHTML = `
+              <span class="lobby-player-icon">${p.isHost ? '👑' : '🟢'}</span>
+              <span class="lobby-player-name">${this.escapeHtml(p.name)} ${p.isHost ? '(Sen)' : ''}</span>
+              <span class="lobby-ready-badge ${p.isHost ? 'leader' : ''}">${p.isHost ? 'LİDER' : 'HAZIR'}</span>
+            `;
+            lobbyList.appendChild(li);
+          });
+        }
+        if (lobbyCount) lobbyCount.textContent = players.length.toString();
+
+        if (startRoomGameBtnText) {
+          if (players.length > 1) {
+            startRoomGameBtnText.textContent = `ARENAYI BAŞLAT (${players.length} Oyuncuyla Başla) 🚀`;
+          } else {
+            startRoomGameBtnText.textContent = 'ARENAYI BAŞLAT 🚀';
+          }
+        }
+        if (lobbyStatusBadge) {
+          lobbyStatusBadge.textContent = players.length > 1 ? `🟢 ${players.length} Oyuncu Hazır` : '🟢 Lobi Açık';
+        }
+      } else {
+        // İSTEMCİ (CLIENT) GÖRÜNÜMÜ: Odaya katılan arkadaş bekleme odasında lobiyi izler
+        if (clientLobbyList) {
+          clientLobbyList.innerHTML = '';
+          players.forEach((p) => {
+            const isMe = p.id === this.network.myPeerId;
+            const li = document.createElement('li');
+            li.className = p.isHost ? 'lobby-item is-host' : 'lobby-item';
+            li.innerHTML = `
+              <span class="lobby-player-icon">${p.isHost ? '👑' : '🟢'}</span>
+              <span class="lobby-player-name">${this.escapeHtml(p.name)} ${isMe ? '(Sen)' : ''}</span>
+              <span class="lobby-ready-badge ${p.isHost ? 'leader' : ''}">${p.isHost ? 'LİDER' : 'HAZIR'}</span>
+            `;
+            clientLobbyList.appendChild(li);
+          });
+        }
+        if (clientLobbyCount) clientLobbyCount.textContent = players.length.toString();
+
+        const hostPlayer = players.find(p => p.isHost);
+        if (waitingHostName && hostPlayer) {
+          waitingHostName.textContent = hostPlayer.name;
+        }
+        if (waitingRoomCodeVal && (roomCode || this.network.roomCode)) {
+          waitingRoomCodeVal.textContent = roomCode || this.network.roomCode;
+        }
+      }
+    };
+
+    // NetworkManager Lobi Güncelleme Callback
+    this.network.onLobbyUpdated = (players, roomCode) => {
+      renderLobbyPlayers(players, roomCode);
+    };
+
+    // Arkadaşlarla Oyna butonuna basıldığında
     if (openFriendsRoomBtn && multiplayerModal) {
       openFriendsRoomBtn.addEventListener('click', () => {
         multiplayerModal.classList.remove('hidden');
-        const roomLinkInput = document.getElementById('roomLinkInput');
+        if (roomTabsBar) roomTabsBar.classList.remove('hidden');
+        if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
 
-        if (!this.network.roomCode) {
+        // Sekmeyi Oda Kur olarak aç
+        if (tabCreateRoom) tabCreateRoom.classList.add('active');
+        if (tabJoinRoom) tabJoinRoom.classList.remove('active');
+        if (createRoomContent) createRoomContent.classList.remove('hidden');
+        if (joinRoomContent) joinRoomContent.classList.add('hidden');
+
+        const roomLinkInput = document.getElementById('roomLinkInput');
+        const myName = this.getPlayerName();
+        if (hostPlayerNameLobby) hostPlayerNameLobby.textContent = `${myName} (Sen - Lider)`;
+
+        if (!this.network.roomCode || !this.network.isHost) {
           if (myRoomCodeEl) myRoomCodeEl.textContent = 'Kod üretiliyor...';
           if (roomLinkInput) roomLinkInput.value = 'Link oluşturuluyor...';
 
           this.network.createRoom().then(code => {
             if (myRoomCodeEl) myRoomCodeEl.textContent = code;
             if (roomLinkInput) roomLinkInput.value = this.getInviteLink(code);
+            renderLobbyPlayers(this.network.getLobbyList(), code);
           }).catch(() => {
             if (myRoomCodeEl) myRoomCodeEl.textContent = 'Hata!';
             if (roomLinkInput) roomLinkInput.value = 'Bağlantı hatası!';
@@ -3324,22 +3488,29 @@ class WormArenaGame {
         } else {
           if (myRoomCodeEl) myRoomCodeEl.textContent = this.network.roomCode;
           if (roomLinkInput) roomLinkInput.value = this.getInviteLink(this.network.roomCode);
+          renderLobbyPlayers(this.network.getLobbyList(), this.network.roomCode);
         }
       });
     }
 
-    // Çarpı (✕) butonuna basıldığında modalı kapat ve ana ekrana dön
+    // Modal Kapatma (Çarpı)
     if (closeMultiplayerBtn && multiplayerModal) {
       closeMultiplayerBtn.addEventListener('click', () => {
         multiplayerModal.classList.add('hidden');
+        if (this.network.isMultiplayer && !this.network.isHost && this.state !== 'PLAYING') {
+          this.network.disconnect();
+        }
       });
     }
 
-    // Dışarıya tıklandığında da modalı kapat
+    // Dışarıya tıklandığında kapat
     if (multiplayerModal) {
       multiplayerModal.addEventListener('click', (e) => {
         if (e.target === multiplayerModal) {
           multiplayerModal.classList.add('hidden');
+          if (this.network.isMultiplayer && !this.network.isHost && this.state !== 'PLAYING') {
+            this.network.disconnect();
+          }
         }
       });
     }
@@ -3357,7 +3528,6 @@ class WormArenaGame {
     }
 
     // 2. Web Katılım Linkini Kopyala
-    const copyRoomLinkBtn = document.getElementById('copyRoomLinkBtn');
     if (copyRoomLinkBtn) {
       copyRoomLinkBtn.addEventListener('click', () => {
         const roomCode = this.network.roomCode;
@@ -3391,7 +3561,7 @@ class WormArenaGame {
         }
 
         const inviteUrl = this.getInviteLink(roomCode);
-        const shareMsg = `🎮 Worm Arena Odama Davetlisin!\nOda Kodu: ${roomCode}\n\n👉 Tek tıkla tarayıcıda oynamak için linke tıkla:\n${inviteUrl}`;
+        const shareMsg = `🎮 Worm Arena Odama Davetlisin!\nOda Kodu: ${roomCode}\n\n👉 Tek tıkla tarayıcıda doğrudan odaya girmek için tıkla:\n${inviteUrl}`;
 
         if (navigator.share) {
           navigator.share({
@@ -3407,7 +3577,6 @@ class WormArenaGame {
       });
     }
 
-    const openRoomLinkBtn = document.getElementById('openRoomLinkBtn');
     if (openRoomLinkBtn) {
       openRoomLinkBtn.addEventListener('click', () => {
         const roomCode = this.network.roomCode;
@@ -3419,13 +3588,14 @@ class WormArenaGame {
       });
     }
 
-    // Sekme Geçişleri
+    // Sekme Geçişleri (Oda Kur / Odaya Katıl)
     if (tabCreateRoom && tabJoinRoom && createRoomContent && joinRoomContent) {
       tabCreateRoom.addEventListener('click', () => {
         tabCreateRoom.classList.add('active');
         tabJoinRoom.classList.remove('active');
         createRoomContent.classList.remove('hidden');
         joinRoomContent.classList.add('hidden');
+        if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
       });
 
       tabJoinRoom.addEventListener('click', () => {
@@ -3433,33 +3603,20 @@ class WormArenaGame {
         tabCreateRoom.classList.remove('active');
         joinRoomContent.classList.remove('hidden');
         createRoomContent.classList.add('hidden');
+        if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
       });
     }
 
-    this.network.onPlayerJoined = (player) => {
-      sounds.playSpecial();
-      const li = document.createElement('li');
-      li.className = 'lobby-item';
-      li.id = `lobby-${player.id}`;
-      li.textContent = `🟢 ${player.name} (Katıldı)`;
-      if (lobbyList) lobbyList.appendChild(li);
-      if (lobbyCount) lobbyCount.textContent = (this.network.connections.size + 1).toString();
-    };
-
-    this.network.onPlayerLeft = (peerId) => {
-      const el = document.getElementById(`lobby-${peerId}`);
-      if (el) el.remove();
-      if (lobbyCount) lobbyCount.textContent = (this.network.connections.size + 1).toString();
-    };
-
+    // ==================== ODA SAHİBİ: ARENAYI BAŞLAT ====================
+    // Oda kuran kişi 'ARENAYI BAŞLAT' dediğinde, odadaki tüm arkadaşları eş zamanlı başlatır
     if (startRoomGameBtn) {
       startRoomGameBtn.addEventListener('click', () => {
         const includeBots = botsInRoomToggle ? botsInRoomToggle.checked : true;
-        if (multiplayerModal) multiplayerModal.classList.add('hidden');
-        this.startGame(includeBots);
+        this.network.startRoomGame(includeBots);
       });
     }
 
+    // ==================== ARKADAŞ: ODAYA KATIL & BEKLEMEYE GEÇ ====================
     if (joinRoomSubmitBtn && joinRoomCodeInput && joinStatusMsg) {
       joinRoomSubmitBtn.addEventListener('click', () => {
         const code = joinRoomCodeInput.value.trim();
@@ -3468,9 +3625,9 @@ class WormArenaGame {
           return;
         }
 
-        // Kendi oluşturduğu odaya katılmayı engelle (Kullanıcı İsteği)
-        if (this.network.roomCode && code.toUpperCase() === this.network.roomCode.toUpperCase()) {
-          joinStatusMsg.textContent = '⚠️ Kendi oluşturduğun odaya katılamazsın! Bu kodu arkadaşınla paylaş.';
+        // Kendi oluşturduğu odaya katılmayı engelle
+        if (this.network.isHost && this.network.roomCode && code.toUpperCase() === this.network.roomCode.toUpperCase()) {
+          joinStatusMsg.textContent = '⚠️ Kendi oluşturduğun odaya katılamazsın! Bu kodu arkadaşlarınla paylaş.';
           if (window.showInGameAlert) {
             window.showInGameAlert('Kendi oluşturduğun odaya katılamazsın! Bu kodu arkadaşınla paylaş.', 'warning', '⚠️ ODA HATASI');
           }
@@ -3480,19 +3637,37 @@ class WormArenaGame {
         joinStatusMsg.textContent = 'Odaya bağlanılıyor...';
         joinRoomSubmitBtn.disabled = true;
 
-        const nameInput = document.getElementById('playerNameInput');
-        const playerName = (nameInput && nameInput.value.trim() ? nameInput.value.trim() : 'Oyuncu').substring(0, 14);
-        const skin = SKINS[this.selectedSkinIndex];
-        this.player = new Worm(1600, 1600, playerName, skin, false);
-        this.player.hat = this.equippedHat;
-
         this.network.joinRoom(code).then(() => {
-          joinStatusMsg.textContent = 'Bağlandı! Oyun yükleniyor...';
-          if (multiplayerModal) multiplayerModal.classList.add('hidden');
-        }).catch(() => {
-          joinStatusMsg.textContent = 'Oda bulunamadı veya kod hatalı!';
+          joinStatusMsg.textContent = '';
+          joinRoomSubmitBtn.disabled = false;
+
+          // Başarıyla bağlandı: Bekleme odası görünümünü aktif et!
+          if (roomTabsBar) roomTabsBar.classList.add('hidden');
+          if (createRoomContent) createRoomContent.classList.add('hidden');
+          if (joinRoomContent) joinRoomContent.classList.add('hidden');
+          if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
+
+          if (waitingRoomCodeVal) waitingRoomCodeVal.textContent = code;
+          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibi oyunu başlatmayı bekleniyor...';
+
+          sounds.playSpecial();
+        }).catch((err) => {
+          joinStatusMsg.textContent = 'Odaya bağlanılamadı! Kodun doğruluğundan veya oda sahibinin açık olduğundan emin olun.';
           joinRoomSubmitBtn.disabled = false;
         });
+      });
+    }
+
+    // İstemci Bekleme Odasından Ayrıl Butonu
+    if (clientLeaveRoomBtn) {
+      clientLeaveRoomBtn.addEventListener('click', () => {
+        this.network.disconnect();
+        if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
+        if (roomTabsBar) roomTabsBar.classList.remove('hidden');
+        if (tabJoinRoom) tabJoinRoom.click();
+        if (window.showInGameAlert) {
+          window.showInGameAlert('Odadan ayrıldınız.', 'info', '🚪 AYRILINDI');
+        }
       });
     }
 
@@ -3708,9 +3883,19 @@ class WormArenaGame {
     if (respawnBtn) {
       respawnBtn.addEventListener('click', () => {
         if (this.network.isMultiplayer && !this.network.isHost) {
-          this.startMultiplayerClientGame();
+          this.network.requestRespawn();
+          window.showInGameAlert('Yeniden canlanma isteği gönderildi...', 'info', '🔄 CANLANMA');
+        } else if (this.network.isMultiplayer && this.network.isHost) {
+          const skin = SKINS[this.selectedSkinIndex] || SKINS[0];
+          const rx = Math.round(this.worldWidth / 2 + (Math.random() - 0.5) * 600);
+          const ry = Math.round(this.worldHeight / 2 + (Math.random() - 0.5) * 600);
+          this.player = new Worm(rx, ry, this.getPlayerName(), skin, false);
+          this.player.hat = this.equippedHat;
+          this.gameOverScreen.classList.add('hidden');
+          if (this.joystickZone) this.joystickZone.classList.remove('hidden');
+          this.state = 'PLAYING';
         } else {
-          this.startGame(!this.network.isMultiplayer);
+          this.startGame(true);
         }
       });
     }

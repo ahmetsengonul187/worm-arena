@@ -233,19 +233,22 @@
 
     <!-- ==================== 👥 ARKADAŞLARLA ODA MODU MODALI (PENCERE) ==================== -->
     <div class="modal-backdrop hidden" id="multiplayerModal">
-      <div class="modal-dialog">
+      <div class="modal-dialog multiplayer-dialog">
         <div class="modal-header">
-          <h2 class="modal-title">👥 ARKADAŞLARLA OYNA</h2>
+          <div class="modal-title-wrap">
+            <span class="modal-icon">👥</span>
+            <h2 class="modal-title">ARKADAŞLARLA OYNA</h2>
+          </div>
           <button class="close-modal-btn" id="closeMultiplayerBtn">✕</button>
         </div>
-        <p class="modal-desc">Arkadaşlarınla aynı arenada toplan ve savaş!</p>
+        <p class="modal-desc" id="multiplayerModalDesc">Arkadaşlarınla aynı arenada toplan ve aynı anda savaşa başla!</p>
 
-        <div class="room-tabs">
-          <button class="room-tab-btn active" id="tabCreateRoom">Oda Kur</button>
-          <button class="room-tab-btn" id="tabJoinRoom">Odaya Katıl</button>
+        <div class="room-tabs" id="roomTabsBar">
+          <button class="room-tab-btn active" id="tabCreateRoom">👑 Oda Kur</button>
+          <button class="room-tab-btn" id="tabJoinRoom">🎮 Odaya Katıl</button>
         </div>
 
-        <!-- Oda Kurma Bölümü -->
+        <!-- 1. ODA KURMA BÖLÜMÜ (HOST) -->
         <div id="createRoomTabContent" class="room-tab-content">
           <div class="room-code-display">
             <span class="code-label">SENİN 4 HANELİ ODA KODUN:</span>
@@ -270,13 +273,21 @@
                 <span>🌐 Linki Aç / Test Et</span>
               </button>
             </div>
-            <p class="code-tip">✨ Arkadaşın bu linke tıkladığında hiçbir şey yazmadan doğrudan tarayıcıda odana bağlanır!</p>
+            <p class="code-tip">✨ Arkadaşların bu linke tıkladığında doğrudan tarayıcıdan odana katılır ve beklemeye geçer!</p>
           </div>
 
+          <!-- Canlı Lobi Oyuncu Listesi (Host Görünümü) -->
           <div class="lobby-players-box">
-            <span class="lobby-title">Odada Bekleyenler (<span id="lobbyCount">1</span>):</span>
+            <div class="lobby-header-row">
+              <span class="lobby-title">Odada Bekleyenler (<span id="lobbyCount">1</span>):</span>
+              <span class="lobby-live-badge" id="lobbyStatusBadge">🟢 Lobi Aktif</span>
+            </div>
             <ul class="lobby-list" id="lobbyList">
-              <li class="lobby-item is-host">👑 Sen (Oda Sahibi)</li>
+              <li class="lobby-item is-host">
+                <span class="lobby-player-icon">👑</span>
+                <span class="lobby-player-name" id="hostPlayerNameLobby">Sen (Oda Sahibi)</span>
+                <span class="lobby-ready-badge leader">LİDER</span>
+              </li>
             </ul>
           </div>
 
@@ -286,20 +297,60 @@
           </div>
 
           <button class="play-btn-large glow-pulse" id="startRoomGameBtn">
-            <span>ARENAYI BAŞLAT 🚀</span>
+            <span id="startRoomGameBtnText">ARENAYI BAŞLAT 🚀</span>
           </button>
+          <p class="lobby-host-hint">💡 Butona bastığında odadaki bütün arkadaşların aynı anda oyuna başlayacaktır.</p>
         </div>
 
-        <!-- Odaya Katılma Bölümü -->
+        <!-- 2. ODAYA KATILMA BÖLÜMÜ -->
         <div id="joinRoomTabContent" class="room-tab-content hidden">
           <div class="join-input-group">
-            <label class="join-label">Arkadaşının Verdiği Oda Kodunu Gir:</label>
+            <label class="join-label">Arkadaşının Verdiği 4 Haneli Oda Kodunu Gir:</label>
             <input type="text" id="joinRoomCodeInput" maxlength="6" placeholder="Örn: 7842" class="join-code-input">
             <p class="join-status-msg" id="joinStatusMsg"></p>
           </div>
 
           <button class="play-btn-large glow-pulse" id="joinRoomSubmitBtn">
             <span>ODAYA BAĞLAN & GİR 🎮</span>
+          </button>
+        </div>
+
+        <!-- 3. KATILAN ARKADAŞ İÇİN BEKLEME ODASI (CLIENT LOBİSİ) -->
+        <div id="waitingRoomTabContent" class="room-tab-content hidden">
+          <div class="waiting-card">
+            <div class="waiting-card-glow"></div>
+            <div class="waiting-spinner-ring"></div>
+            <div class="waiting-room-meta">
+              <span class="waiting-room-label">ODA KODU</span>
+              <span class="waiting-room-code" id="waitingRoomCodeVal">----</span>
+            </div>
+            <div class="waiting-pulse-banner">
+              <span class="waiting-pulse-dot"></span>
+              <span id="waitingStatusText">Oda sahibi oyunu başlatmayı bekleniyor...</span>
+            </div>
+          </div>
+
+          <div class="lobby-players-box">
+            <div class="lobby-header-row">
+              <span class="lobby-title">Odada Bekleyenler (<span id="clientLobbyCount">1</span>):</span>
+              <span class="lobby-live-badge waiting">⏳ Başlama Bekleniyor</span>
+            </div>
+            <ul class="lobby-list" id="clientLobbyList">
+              <li class="lobby-item is-host">
+                <span class="lobby-player-icon">👑</span>
+                <span class="lobby-player-name" id="waitingHostName">Oda Sahibi</span>
+                <span class="lobby-ready-badge leader">LİDER</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="waiting-notice-box">
+            <span class="waiting-notice-icon">🎮</span>
+            <span class="waiting-notice-text">Oda sahibi "Arenayı Başlat" dediği an oyun herkes için aynı anda başlayacaktır. Lütfen ayrılmadan bekleyin!</span>
+          </div>
+
+          <button class="room-btn-danger" id="clientLeaveRoomBtn">
+            <span>🚪 Odadan Ayrıl</span>
           </button>
         </div>
       </div>
