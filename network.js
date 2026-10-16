@@ -35,15 +35,23 @@ class NetworkManager {
     return Math.floor(1000 + Math.random() * 9000).toString();
   }
 
-  // STUN Sunucu Listesi (NAT arkasındaki oyuncuların doğrudan bağlanması için)
+  // STUN & TURN Sunucu Listesi (NAT arkasındaki, Mobil 4G/5G ve Farklı Ağlardaki Oyuncuların Doğrudan veya Röle ile Kesintisiz Bağlanması için)
   getIceServers() {
     return [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun.cloudflare.com:3478' },
-      { urls: 'stun:global.stun.twilio.com:3478' }
+      { urls: 'stun:stun.relay.metered.ca:80' },
+      {
+        urls: [
+          'turn:global.relay.metered.ca:80',
+          'turn:global.relay.metered.ca:443',
+          'turn:global.relay.metered.ca:443?transport=tcp'
+        ],
+        username: 'openrelay',
+        credential: 'openrelay'
+      }
     ];
   }
 
@@ -68,7 +76,8 @@ class NetworkManager {
       this.peer = new Peer(peerId, {
         debug: 1,
         config: {
-          iceServers: this.getIceServers()
+          iceServers: this.getIceServers(),
+          sdpSemantics: 'unified-plan'
         }
       });
 
@@ -97,6 +106,9 @@ class NetworkManager {
           // Kod çakıştıysa yeni bir kod ile dene
           this.createRoom(this.generateRoomCode()).then(resolve).catch(reject);
         } else {
+          if (window.showInGameAlert) {
+            window.showInGameAlert('Oda kurulamadı. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.', 'warning', '⚠️ ODA HATASI');
+          }
           if (this.onError) this.onError(err);
           reject(err);
         }
@@ -328,9 +340,20 @@ class NetworkManager {
       this.peer = new Peer({
         debug: 1,
         config: {
-          iceServers: this.getIceServers()
+          iceServers: this.getIceServers(),
+          sdpSemantics: 'unified-plan'
         }
       });
+
+      let connTimeout = setTimeout(() => {
+        if (!this.hostConn || !this.hostConn.open) {
+          if (window.showInGameAlert) {
+            window.showInGameAlert('Odaya bağlanma zaman aşımına uğradı. Oda kodunu kontrol edin veya oda sahibinin açık olduğundan emin olun.', 'warning', '⚠️ BAĞLANTI ZAMAN AŞIMI');
+          }
+          this.disconnect();
+          reject(new Error('Bağlantı zaman aşımı'));
+        }
+      }, 14000);
 
       this.peer.on('open', (id) => {
         this.myPeerId = id;
@@ -340,6 +363,7 @@ class NetworkManager {
         const conn = this.peer.connect(targetHostId, { reliable: true });
 
         conn.on('open', () => {
+          clearTimeout(connTimeout);
           this.hostConn = conn;
           console.log('Odaya başarıyla bağlandı!');
 
@@ -363,6 +387,7 @@ class NetworkManager {
         });
 
         conn.on('close', () => {
+          clearTimeout(connTimeout);
           if (window.showInGameAlert) {
             window.showInGameAlert('Oda sahibi oyunu kapattı veya bağlantı koptu.', 'warning', '⚠️ BAĞLANTI KOPTU');
           }
@@ -370,13 +395,25 @@ class NetworkManager {
         });
 
         conn.on('error', (err) => {
+          clearTimeout(connTimeout);
           console.error('Bağlantı hatası:', err);
+          if (window.showInGameAlert) {
+            window.showInGameAlert('Oda sahibine bağlanırken hata oluştu.', 'warning', '⚠️ BAĞLANTI HATASI');
+          }
           reject(err);
         });
       });
 
       this.peer.on('error', (err) => {
+        clearTimeout(connTimeout);
         console.error('Odaya bağlanılamadı:', err);
+        let msg = 'Odaya bağlanılamadı. Kodun doğruluğunu kontrol edin.';
+        if (err.type === 'peer-unavailable') {
+          msg = `"${this.roomCode}" kodlu oda bulunamadı! Oda sahibinin odayı kurduğundan emin olun.`;
+        }
+        if (window.showInGameAlert) {
+          window.showInGameAlert(msg, 'warning', '⚠️ ODA BULUNAMADI');
+        }
         if (this.onError) this.onError(err);
         reject(err);
       });
@@ -457,12 +494,25 @@ class NetworkManager {
           this.game.player.score = wData.score;
           this.game.player.kills = wData.kills || 0;
           this.game.player.radius = wData.radius;
-          this.game.player.isBoosting = !!wData.isBoosting;
-          this.game.player.x = wData.x;
-          this.game.player.y = wData.y;
-          this.game.player.angle = wData.angle;
-          if (wData.body && wData.body.length > 0) {
-            this.game.player.body = wData.body;
+
+          // Yumuşak İstemci Uzlaşması (Smooth Client Reconciliation)
+          // Eğer sunucu konumu ile yerel tahmin arasında büyük bir fark varsa düzelt
+          const dx = wData.x - this.game.player.x;
+          const dy = wData.y - this.game.player.y;
+          const distSq = dx * dx + dy * dy;
+
+          if (distSq > 10000) {
+            // Ciddi kayma veya respawn: doğrudan eşitle
+            this.game.player.x = wData.x;
+            this.game.player.y = wData.y;
+            this.game.player.angle = wData.angle;
+            if (wData.body && wData.body.length > 0) {
+              this.game.player.body = wData.body;
+            }
+          } else if (distSq > 25) {
+            // Küçük ağ gecikmesi: kademeli olarak kaydır
+            this.game.player.x += dx * 0.25;
+            this.game.player.y += dy * 0.25;
           }
         } else {
           // UZAKTAKİ ARKADAŞ VEYA BOT
@@ -474,18 +524,26 @@ class NetworkManager {
             worm.hat = wData.hatId || 'none';
             this.remotePlayers.set(wData.peerId, worm);
           }
-          worm.x = wData.x;
-          worm.y = wData.y;
-          worm.angle = wData.angle;
+          worm.targetAngle = wData.angle;
+          const rdx = wData.x - worm.x;
+          const rdy = wData.y - worm.y;
+          if (rdx * rdx + rdy * rdy > 6400) {
+            worm.x = wData.x;
+            worm.y = wData.y;
+            worm.angle = wData.angle;
+            if (wData.body && wData.body.length > 0) {
+              worm.body = wData.body;
+            }
+          } else {
+            worm.x += rdx * 0.35;
+            worm.y += rdy * 0.35;
+          }
           worm.radius = wData.radius;
           worm.score = wData.score;
           worm.kills = wData.kills || 0;
           worm.isBoosting = !!wData.isBoosting;
           worm.isDead = !!wData.isDead;
           worm.hat = wData.hatId || worm.hat;
-          if (wData.body && wData.body.length > 0) {
-            worm.body = wData.body;
-          }
         }
       });
 

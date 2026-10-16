@@ -19,8 +19,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&family=Fredoka+One&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
-  <!-- WebRTC Çok Oyunculu Kütüphanesi -->
-  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- WebRTC Çok Oyunculu Kütüphanesi (Yerel Dosya + Güvenli CDN Yedeği) -->
+  <script src="peerjs.min.js"></script>
+  <script>
+    if (typeof Peer === 'undefined') {
+      document.write('<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');
+    }
+  </script>
 </head>
 <body>
   <div class="game-container" id="gameContainer">

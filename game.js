@@ -1836,6 +1836,9 @@ class WormArenaGame {
   }
 
   startGame(includeBots = true) {
+    // Tek kişilik oyun başlatılırken eski ağ bağlantılarını temizle
+    this.network.disconnect();
+
     const playerName = this.validatePlayerName();
     if (!playerName) return;
 
@@ -2044,16 +2047,34 @@ class WormArenaGame {
       }
     }
 
-    // CLIENT MODU
+    // CLIENT MODU (Yerel Fizik Tahmini & 60 FPS Kesintisiz Akıcı Hareket)
     if (this.network.isMultiplayer && !this.network.isHost) {
       this.network.sendThrottledInput(this.player.targetAngle, this.player.isBoosting);
+
+      const allWorms = [this.player, ...this.network.remotePlayers.values()];
+      this.player.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
+
+      // Arena duvarına çarpma kontrolü
+      if (this.player.isDead) {
+        this.handlePlayerDeath('Arena Duvarına');
+        return;
+      }
+
+      // Diğer bağlı oyuncuların hareketlerini yerel olarak devam ettir
+      for (const rw of this.network.remotePlayers.values()) {
+        rw.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
+      }
 
       this.camera.x += (this.player.x - window.innerWidth / 2 - this.camera.x) * 0.15;
       this.camera.y += (this.player.y - window.innerHeight / 2 - this.camera.y) * 0.15;
 
       this.updateParticles();
-      const allWorms = [this.player, ...this.network.remotePlayers.values()];
-      this.updateLeaderboard(allWorms);
+
+      this.hudUpdateTimer = (this.hudUpdateTimer || 0) + 1;
+      if (this.hudUpdateTimer % 15 === 0) {
+        this.updateLeaderboard(allWorms);
+        this.updatePowerupHUD();
+      }
       return;
     }
 
@@ -4018,7 +4039,11 @@ class WormArenaGame {
       const roomCode = params.get('oda') || params.get('room');
       if (roomCode && roomCode.trim().length > 0) {
         const cleanCode = roomCode.trim();
-        setTimeout(() => {
+        const tryAutoJoin = (attempts = 0) => {
+          if (typeof Peer === 'undefined' && attempts < 30) {
+            setTimeout(() => tryAutoJoin(attempts + 1), 200);
+            return;
+          }
           const nameInput = document.getElementById('playerNameInput');
           if (nameInput && !nameInput.value.trim()) {
             nameInput.value = `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
@@ -4033,11 +4058,14 @@ class WormArenaGame {
           if (tabJoinRoom) tabJoinRoom.click();
           if (joinRoomCodeInput) joinRoomCodeInput.value = cleanCode;
 
-          window.showInGameAlert(`${cleanCode} numaralı arkadaş odasına bağlanılıyor...`, 'info', '🎮 ODAYA KATIL');
-          if (joinRoomSubmitBtn) {
-            setTimeout(() => joinRoomSubmitBtn.click(), 600);
+          if (window.showInGameAlert) {
+            window.showInGameAlert(`${cleanCode} numaralı arkadaş odasına bağlanılıyor...`, 'info', '🎮 ODAYA KATIL');
           }
-        }, 500);
+          if (joinRoomSubmitBtn) {
+            setTimeout(() => joinRoomSubmitBtn.click(), 400);
+          }
+        };
+        setTimeout(() => tryAutoJoin(0), 400);
       }
     } catch (e) {
       console.warn('URL room invite check failed:', e);

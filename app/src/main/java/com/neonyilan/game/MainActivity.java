@@ -38,6 +38,11 @@ public class MainActivity extends AppCompatActivity {
             settings.setDatabaseEnabled(true);
             settings.setAllowFileAccess(true);
             settings.setAllowContentAccess(true);
+            settings.setAllowFileAccessFromFileURLs(true);
+            settings.setAllowUniversalAccessFromFileURLs(true);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            }
             settings.setUseWideViewPort(true);
             settings.setLoadWithOverviewMode(true);
             settings.setMediaPlaybackRequiresUserGesture(false);
@@ -74,7 +79,14 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             });
-            webView.setWebChromeClient(new WebChromeClient());
+            webView.setWebChromeClient(new WebChromeClient() {
+                @Override
+                public void onPermissionRequest(final android.webkit.PermissionRequest request) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        request.grant(request.getResources());
+                    }
+                }
+            });
 
             // Dahili assets klasöründen index.html'i yükle
             webView.loadUrl("file:///android_asset/index.html");
