@@ -218,31 +218,9 @@ class NetworkManager {
         sounds.playSpecial();
       }
 
-      // Oyun zaten başlamışsa bu oyuncuyu hemen canlı arenaya dahil et (Hot-Join)
-      if (this.game.state === 'PLAYING') {
-        const skin = (typeof SKINS !== 'undefined' && SKINS.find(s => s.id === pInfo.skinId)) || SKINS[0];
-        const spawnX = Math.round(this.game.worldWidth / 2 + (Math.random() - 0.5) * 800);
-        const spawnY = Math.round(this.game.worldHeight / 2 + (Math.random() - 0.5) * 800);
-        const worm = new Worm(spawnX, spawnY, pInfo.name, skin, false);
-        worm.peerId = peerId;
-        worm.hat = pInfo.hatId;
-        this.remotePlayers.set(peerId, worm);
-
-        const conn = this.connections.get(peerId);
-        if (conn && conn.open) {
-          conn.send({
-            type: 'GAME_START',
-            worldWidth: this.game.worldWidth,
-            worldHeight: this.game.worldHeight,
-            foods: this.game.foods.map(f => ({ x: Math.round(f.x), y: Math.round(f.y), type: f.type })),
-            mySpawn: { x: spawnX, y: spawnY, angle: 0 },
-            players: this.getLobbyList()
-          });
-        }
-      } else {
-        // Lobi bekleme modundayız; listeyi güncelle ve herkese bildir
-        this.broadcastLobbyState();
-      }
+      // Odaya katılan oyuncuyu lobiye ekle ve güncel oyuncu listesini herkese yay
+      // Oda sahibi 'ARENAYI BAŞLAT' butonuna basana kadar hiçbir oyuncu arenaya giremez!
+      this.broadcastLobbyState();
     } else if (data.type === 'PLAYER_INPUT') {
       const worm = this.remotePlayers.get(peerId);
       if (worm && !worm.isDead) {
@@ -285,8 +263,8 @@ class NetworkManager {
     const centerY = this.game.worldHeight / 2;
     const spawnRadius = Math.min(500, 200 + count * 45);
 
-    // Host dünyasında yiyecekleri tazele
-    this.game.initFoods(600);
+    // Host dünyasında yiyecekleri tazele (6400x6400 dev arena için 1800 yem)
+    this.game.initFoods(1800);
 
     // Tüm oyuncular için merkez etrafında düzenli başlangıç noktaları oluştur
     const spawns = {};
@@ -308,6 +286,7 @@ class NetworkManager {
       worm.hat = p.hatId || 'none';
       worm.angle = sp.angle;
       worm.targetAngle = sp.angle;
+      worm.ghostTimer = 150; // Başlangıç koruması: ilk 2.5 saniye hasarsızlık
       this.remotePlayers.set(peerId, worm);
     });
 
@@ -398,10 +377,16 @@ class NetworkManager {
 
         conn.on('close', () => {
           clearTimeout(connTimeout);
+          console.warn('Oda sahibi ile bağlantı kesildi');
           if (window.showInGameAlert) {
-            window.showInGameAlert('Oda sahibi oyunu kapattı veya bağlantı koptu.', 'warning', '⚠️ BAĞLANTI KOPTU');
+            window.showInGameAlert('Oda bağlantısı kesildi. Menüye dönülüyor...', 'warning', '⚠️ BAĞLANTI KOPTU');
           }
-          this.game.returnToMenu();
+          // Hemen lınk diye oyundan atmak yerine 3 sn bekle
+          setTimeout(() => {
+            if (this.game && this.game.state === 'PLAYING') {
+              this.game.returnToMenu();
+            }
+          }, 3000);
         });
 
         conn.on('error', (err) => {
@@ -440,9 +425,9 @@ class NetworkManager {
         this.onLobbyUpdated(data.players || [], data.roomCode);
       }
     } else if (data.type === 'GAME_START') {
-      // Host oyunu başlattı!
-      this.game.worldWidth = data.worldWidth || 3200;
-      this.game.worldHeight = data.worldHeight || 3200;
+      // Host oyunu başlattı! (2 kat genişletilmiş dünya: 6400x6400)
+      this.game.worldWidth = data.worldWidth || 6400;
+      this.game.worldHeight = data.worldHeight || 6400;
 
       if (data.foods) {
         this.game.foods = data.foods.map(f => {
@@ -471,6 +456,7 @@ class NetworkManager {
           worm.peerId = pId;
           worm.hat = p.hatId || 'none';
           worm.angle = sp.angle || 0;
+          worm.ghostTimer = 150; // Başlangıç koruması
           this.remotePlayers.set(pId, worm);
         }
       });
@@ -483,8 +469,9 @@ class NetworkManager {
         this.game.player.x = data.x;
         this.game.player.y = data.y;
         this.game.player.isDead = false;
+        this.game.player.ghostTimer = 150;
         this.game.player.body = [{ x: data.x, y: data.y }, { x: data.x - 10, y: data.y }];
-        this.game.player.score = 10;
+        this.game.player.score = 25;
         this.game.gameOverScreen.classList.add('hidden');
         if (this.game.joystickZone) this.game.joystickZone.classList.remove('hidden');
         this.game.state = 'PLAYING';
@@ -505,24 +492,21 @@ class NetworkManager {
           this.game.player.kills = wData.kills || 0;
           this.game.player.radius = wData.radius;
 
-          // Yumuşak İstemci Uzlaşması (Smooth Client Reconciliation)
-          // Eğer sunucu konumu ile yerel tahmin arasında büyük bir fark varsa düzelt
+          // Yumuşak Konum Uzlaşması (Smooth Client Position Reconciliation)
+          // DİKKAT: targetAngle ve angle ASLA sunucu tarafından ezilmez!
+          // İstemci kendi yönünün yerel otoritesidir; bu sayede tarayıcıda yılan ASLA donmaz veya kilitlenmez!
           const dx = wData.x - this.game.player.x;
           const dy = wData.y - this.game.player.y;
           const distSq = dx * dx + dy * dy;
 
-          if (distSq > 10000) {
+          if (distSq > 40000) {
             // Ciddi kayma veya respawn: doğrudan eşitle
             this.game.player.x = wData.x;
             this.game.player.y = wData.y;
-            this.game.player.angle = wData.angle;
-            if (wData.body && wData.body.length > 0) {
-              this.game.player.body = wData.body;
-            }
-          } else if (distSq > 25) {
-            // Küçük ağ gecikmesi: kademeli olarak kaydır
-            this.game.player.x += dx * 0.25;
-            this.game.player.y += dy * 0.25;
+          } else if (distSq > 36) {
+            // Küçük ağ gecikmesi: kademeli olarak yumuşak kaydır
+            this.game.player.x += dx * 0.18;
+            this.game.player.y += dy * 0.18;
           }
         } else {
           // UZAKTAKİ ARKADAŞ VEYA BOT
@@ -582,34 +566,52 @@ class NetworkManager {
   }
 
   // ==================== 4. ANLIK DURUM YAYINI (HOST) ====================
-  // Host: Tüm bağlı istemcilere anlık oyun durumunu yayınlar (Throttled)
+  // Host: Tüm bağlı istemcilere anlık oyun durumunu yayınlar (Throttled & Downsampled)
   broadcastState(worms, newFoods = [], eatenIndices = []) {
     if (!this.isHost || this.connections.size === 0) return;
 
+    // Gövde segmentlerini ağ üzerinden aktarırken seyrelt (downsample):
+    // Her karede 50 segment yerine ana omurgayı (18-22 segment) aktararak bant genişliğini %70 düşürür
     const payload = {
       type: 'GAME_TICK',
-      worms: worms.map(w => ({
-        peerId: w.peerId || 'host',
-        name: w.name,
-        skinId: w.skin ? w.skin.id : 'white_king',
-        hatId: w.hat || 'none',
-        isBot: !!w.isBot,
-        x: Math.round(w.x),
-        y: Math.round(w.y),
-        angle: Number(w.angle.toFixed(2)),
-        radius: Math.round(w.radius),
-        score: Math.round(w.score),
-        kills: w.kills || 0,
-        isBoosting: !!w.isBoosting,
-        isDead: !!w.isDead,
-        body: w.body.map(seg => ({ x: Math.round(seg.x), y: Math.round(seg.y) }))
-      })),
+      worms: worms.map(w => {
+        const step = Math.max(1, Math.ceil(w.body.length / 22));
+        const downsampledBody = [];
+        for (let b = 0; b < w.body.length; b += step) {
+          downsampledBody.push({ x: Math.round(w.body[b].x), y: Math.round(w.body[b].y) });
+        }
+        if (w.body.length > 0 && (w.body.length - 1) % step !== 0) {
+          const tail = w.body[w.body.length - 1];
+          downsampledBody.push({ x: Math.round(tail.x), y: Math.round(tail.y) });
+        }
+
+        return {
+          peerId: w.peerId || 'host',
+          name: w.name,
+          skinId: w.skin ? w.skin.id : 'white_king',
+          hatId: w.hat || 'none',
+          isBot: !!w.isBot,
+          x: Math.round(w.x),
+          y: Math.round(w.y),
+          angle: Number(w.angle.toFixed(2)),
+          radius: Math.round(w.radius),
+          score: Math.round(w.score),
+          kills: w.kills || 0,
+          isBoosting: !!w.isBoosting,
+          isDead: !!w.isDead,
+          body: downsampledBody
+        };
+      }),
       newFoods: newFoods,
       eatenIndices: eatenIndices
     };
 
     this.connections.forEach(conn => {
       if (conn && conn.open) {
+        // RTCDataChannel Buffer Taşması Kontrolü (Buffer > 32KB ise bu kareyi atla, kanalı çökertme!)
+        if (conn.dataChannel && conn.dataChannel.bufferedAmount > 32768) {
+          return;
+        }
         try {
           conn.send(payload);
         } catch (e) {
@@ -628,8 +630,8 @@ class NetworkManager {
     const angleDiff = Math.abs(targetAngle - this.lastSentAngle);
     const boostChanged = isBoosting !== this.lastSentBoosting;
 
-    // Açı farkı > 0.02 rad veya turbo değiştiyse veya 40ms geçtiyse gönder (~25 input/sn)
-    if (boostChanged || angleDiff > 0.02 || (now - this.lastInputTime > 40)) {
+    // Açı farkı > 0.015 rad veya turbo değiştiyse veya 35ms geçtiyse gönder (~28 input/sn)
+    if (boostChanged || angleDiff > 0.015 || (now - this.lastInputTime > 35)) {
       this.lastSentAngle = targetAngle;
       this.lastSentBoosting = isBoosting;
       this.lastInputTime = now;
