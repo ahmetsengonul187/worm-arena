@@ -1768,6 +1768,41 @@ class WormArenaGame {
     }
   }
 
+  // Çok oyunculu odada tüm oyuncuların aynı yemleri görmesi için tohum (seed) tabanlı üretim
+  initFoodsWithSeed(seedNum, count = 800) {
+    this.foods = [];
+    let s = (typeof seedNum === 'string')
+      ? seedNum.split('').reduce((acc, c) => (acc * 31 + c.charCodeAt(0)) & 0xffffffff, 12345)
+      : (Number(seedNum) || 12345);
+
+    const rng = () => {
+      s = (s * 1664525 + 1013904223) & 0xffffffff;
+      return (s >>> 0) / 4294967296;
+    };
+
+    for (let i = 0; i < count; i++) {
+      const fx = rng() * (this.worldWidth - 100) + 50;
+      const fy = rng() * (this.worldHeight - 100) + 50;
+      const rand = rng();
+      let foodDef;
+      if (rand < 0.38) foodDef = FOOD_TYPES[0]; // Apple
+      else if (rand < 0.65) foodDef = FOOD_TYPES[1]; // Banana
+      else if (rand < 0.82) foodDef = FOOD_TYPES[2]; // Donut
+      else if (rand < 0.92) foodDef = FOOD_TYPES[3]; // Star Coin
+      else if (rand < 0.96) foodDef = FOOD_TYPES[4]; // Orb
+      else if (rand < 0.975) foodDef = FOOD_TYPES[5]; // Magnet
+      else if (rand < 0.99) foodDef = FOOD_TYPES[6]; // Ghost
+      else foodDef = FOOD_TYPES[7]; // Double points
+
+      this.foods.push({
+        x: fx,
+        y: fy,
+        ...foodDef,
+        pulse: rng() * Math.PI * 2
+      });
+    }
+  }
+
   spawnFood(x = null, y = null, forcedType = null) {
     const fx = x !== null ? x : Math.random() * (this.worldWidth - 100) + 50;
     const fy = y !== null ? y : Math.random() * (this.worldHeight - 100) + 50;
@@ -1916,7 +1951,10 @@ class WormArenaGame {
     this.startScreen.classList.add('hidden');
     this.gameOverScreen.classList.add('hidden');
     const multiplayerModal = document.getElementById('multiplayerModal');
-    if (multiplayerModal) multiplayerModal.classList.add('hidden');
+    if (multiplayerModal) {
+      multiplayerModal.classList.add('hidden');
+      multiplayerModal.style.display = 'none';
+    }
     if (this.joystickZone) this.joystickZone.classList.remove('hidden');
 
     if (this.hudRoomBadge && this.network.roomCode) {
@@ -1959,8 +1997,11 @@ class WormArenaGame {
     this.bestRank = 99;
     this.startScreen.classList.add('hidden');
     this.gameOverScreen.classList.add('hidden');
-    const multiplayerModal = document.getElementById('multiplayerModal');
-    if (multiplayerModal) multiplayerModal.classList.add('hidden');
+    const mModal = document.getElementById('multiplayerModal');
+    if (mModal) {
+      mModal.classList.add('hidden');
+      mModal.style.display = 'none';
+    }
     if (this.joystickZone) this.joystickZone.classList.remove('hidden');
 
     if (this.hudRoomBadge && this.network.roomCode) {
@@ -2017,10 +2058,20 @@ class WormArenaGame {
           this.gameOverScreen.style.display = 'flex';
         }
       }
-      return;
+      // DİKKAT: Host ise oyun döngüsünden çıkma! Host, tüm odadaki oyuncuların sunucusudur.
+      if (!this.network.isMultiplayer || !this.network.isHost) {
+        return;
+      }
     }
 
-    if (this.state !== 'PLAYING' || !this.player) return;
+    if (this.state === 'GAMEOVER') {
+      // DİKKAT: Host ise oyun döngüsünden çıkma! Host, tüm odadaki oyuncuların sunucusudur.
+      if (!this.network.isMultiplayer || !this.network.isHost) {
+        return;
+      }
+    }
+
+    if ((this.state !== 'PLAYING' && (!this.network.isMultiplayer || !this.network.isHost)) || !this.player) return;
 
     // Canlı Etkinlik Kontrolü (Altın Yağmuru Her 80 sn)
     this.eventTimer++;
@@ -2030,7 +2081,7 @@ class WormArenaGame {
     }
 
     // Mıknatıs Gücü Kontrolü (Yiyecekleri Vakumlama)
-    if (this.player.magnetTimer > 0) {
+    if (this.player && this.player.magnetTimer > 0) {
       const magnetRange = 260;
       for (const food of this.foods) {
         const d = Math.hypot(food.x - this.player.x, food.y - this.player.y);
@@ -2081,7 +2132,8 @@ class WormArenaGame {
       }
     }
 
-    // CLIENT MODU (Yerel Fizik Tahmini & 60 FPS Kesintisiz Akıcı Hareket)
+    // ==================== CLIENT MODU ====================
+    // İstemcide akıcı yerel kontrol + Anlık Kafa-Gövde Çarpışma Hissi
     if (this.network.isMultiplayer && !this.network.isHost) {
       this.network.sendThrottledInput(this.player.targetAngle, this.player.isBoosting);
 
@@ -2094,14 +2146,38 @@ class WormArenaGame {
         return;
       }
 
-      // Diğer bağlı oyuncuların hareketlerini yerel olarak devam ettir
-      for (const rw of this.network.remotePlayers.values()) {
-        rw.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
+      // Anlık Kafa-Gövde Çarpışma Kontrolü (Diğer yılanların içinden geçmeyi %100 önler!)
+      if (!this.player.isDead && this.player.ghostTimer <= 0) {
+        for (const rw of this.network.remotePlayers.values()) {
+          if (rw.isDead || rw.ghostTimer > 0) continue;
+          const vPoints = [{ x: rw.x, y: rw.y }, ...rw.body];
+          for (let k = 1; k < vPoints.length; k++) {
+            const p1 = vPoints[k - 1];
+            const p2 = vPoints[k];
+            const segRadius = Math.max(10, rw.radius * 0.9);
+            const hitDist = this.player.radius * 0.9 + segRadius;
+            const segDx = p2.x - p1.x;
+            const segDy = p2.y - p1.y;
+            const segLenSq = segDx * segDx + segDy * segDy;
+            let t = segLenSq > 0 ? ((this.player.x - p1.x) * segDx + (this.player.y - p1.y) * segDy) / segLenSq : 0;
+            if (t < 0) t = 0;
+            else if (t > 1) t = 1;
+
+            const cx = p1.x + t * segDx;
+            const cy = p1.y + t * segDy;
+            const cdx = this.player.x - cx;
+            const cdy = this.player.y - cy;
+            if (cdx * cdx + cdy * cdy <= hitDist * hitDist) {
+              this.handlePlayerDeath(rw.name || 'Rakip Solucan');
+              return;
+            }
+          }
+        }
       }
 
-      // DİKKAT: İstemci tarafında checkWormCollisions ÇALIŞTIRILMAZ!
-      // Tüm kafa-gövde çarpışma ve ezilme kontrollerini otoriter olarak Oda Sahibi (Host) hesaplar
-      // ve ağ paketi (GAME_TICK -> wData.isDead) ile bildirir. Bu sayede istemci asla hayalet gövdelere çarpıp haksız yere ezilmez!
+      // DİKKAT: İstemcide rw.update(allWorms) ÇALIŞTIRILMAZ!
+      // Uzaktaki oyuncular ve botlar sadece sunucudan gelen GAME_TICK ile güncellenir.
+      // Bu sayede uzaktaki yılanlar ne iki kat hızlanır ne de titrer!
 
       this.camera.x += (this.player.x - window.innerWidth / 2 - this.camera.x) * 0.15;
       this.camera.y += (this.player.y - window.innerHeight / 2 - this.camera.y) * 0.15;
@@ -2116,25 +2192,38 @@ class WormArenaGame {
       return;
     }
 
-    // HOST VEYA TEK OYUNCU
+    // ==================== HOST VEYA TEK OYUNCU ====================
     const remotePlayersList = Array.from(this.network.remotePlayers.values());
-    const allWorms = [this.player, ...this.bots, ...remotePlayersList];
+    const allWorms = (this.player && !this.player.isDead)
+      ? [this.player, ...this.bots, ...remotePlayersList]
+      : [...this.bots, ...remotePlayersList];
 
-    this.player.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
+    // Host oyuncusu canlıysa hareket ettir
+    if (this.player && !this.player.isDead) {
+      this.player.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
 
-    // 1. Oyuncu Arena Duvarına Çarptı mı?
-    if (this.player.isDead) {
-      this.handlePlayerDeath('Arena Duvarına');
-      return;
+      // Arena duvarına çarpma kontrolü
+      if (this.player.isDead) {
+        this.handlePlayerDeath('Arena Duvarına');
+      }
+
+      this.camera.x += (this.player.x - window.innerWidth / 2 - this.camera.x) * 0.1;
+      this.camera.y += (this.player.y - window.innerHeight / 2 - this.camera.y) * 0.1;
+    } else if (remotePlayersList.length > 0) {
+      // Host öldüyse kamera ilk canlı odayı/oyuncuyu yumuşakça takip etsin
+      const alivePlayer = remotePlayersList.find(rw => !rw.isDead) || this.bots[0];
+      if (alivePlayer) {
+        this.camera.x += (alivePlayer.x - window.innerWidth / 2 - this.camera.x) * 0.05;
+        this.camera.y += (alivePlayer.y - window.innerHeight / 2 - this.camera.y) * 0.05;
+      }
     }
 
+    // Odaya bağlı tüm uzaktaki oyuncuları sunucu olarak ilerlet
     for (const rw of remotePlayersList) {
       rw.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
     }
 
-    this.camera.x += (this.player.x - window.innerWidth / 2 - this.camera.x) * 0.1;
-    this.camera.y += (this.player.y - window.innerHeight / 2 - this.camera.y) * 0.1;
-
+    // Botları ilerlet
     for (let i = 0; i < this.bots.length; i++) {
       const bot = this.bots[i];
       bot.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
@@ -2144,7 +2233,9 @@ class WormArenaGame {
         this.bots.splice(i, 1);
         i--;
         setTimeout(() => {
-          if (this.state === 'PLAYING') this.spawnBot(Math.floor(Math.random() * 20));
+          if (this.state === 'PLAYING' || (this.network.isMultiplayer && this.network.isHost)) {
+            this.spawnBot(Math.floor(Math.random() * 20));
+          }
         }, 3000);
       }
     }
@@ -2152,10 +2243,10 @@ class WormArenaGame {
     const newFoods = [];
     const eatenIndices = this.checkFoodEating(allWorms, newFoods);
 
-    // 2. Solucan Çarpışmaları (Kafa ve Gövde)
+    // Solucan Çarpışmaları (Kafa ve Gövde)
     this.checkWormCollisions(allWorms);
-    if (this.state !== 'PLAYING') return;
 
+    // Çok oyunculu sunucu tick yayını (Host öldüğünde de devam eder!)
     if (this.network.isMultiplayer && this.network.isHost) {
       this.broadcastTickCounter = (this.broadcastTickCounter || 0) + 1;
       if (this.broadcastTickCounter % 2 === 0) {
@@ -3719,6 +3810,46 @@ class WormArenaGame {
       renderLobbyPlayers(players, roomCode);
     };
 
+    const clientRetryJoinBtn = document.getElementById('clientRetryJoinBtn');
+    const WAITING_MSG = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+
+    // Bağlanma denemesi sırasında durum yazısını canlı güncelle (1/3, 2/3, 3/3)
+    this.network.onJoinStatus = (msg) => {
+      const statusEl = document.getElementById('waitingStatusText');
+      const noticeEl = document.getElementById('waitingOwnerNotice');
+      if (statusEl) statusEl.textContent = msg;
+      if (noticeEl) noticeEl.textContent = msg;
+    };
+
+    // Odaya katılma (hem buton hem davet linki aynı akışı kullanır)
+    this.startClientJoin = (code) => {
+      this.lastJoinCode = code;
+      if (clientRetryJoinBtn) clientRetryJoinBtn.classList.add('hidden');
+
+      return this.network.joinRoom(code).then(() => {
+        const statusEl = document.getElementById('waitingStatusText');
+        const noticeEl = document.getElementById('waitingOwnerNotice');
+        if (statusEl) statusEl.textContent = WAITING_MSG;
+        if (noticeEl) noticeEl.textContent = WAITING_MSG;
+        sounds.playSpecial();
+      }).catch(() => {
+        const statusEl = document.getElementById('waitingStatusText');
+        const noticeEl = document.getElementById('waitingOwnerNotice');
+        if (statusEl) statusEl.textContent = '⚠️ Oda sahibine bağlanılamadı.';
+        if (noticeEl) noticeEl.textContent = 'Oda sahibinin uygulaması açık ve odası kurulu olmalı. "Tekrar Bağlan" ile yeniden deneyin.';
+        if (clientRetryJoinBtn) clientRetryJoinBtn.classList.remove('hidden');
+        throw new Error('join failed');
+      });
+    };
+
+    if (clientRetryJoinBtn) {
+      clientRetryJoinBtn.addEventListener('click', () => {
+        if (this.lastJoinCode) {
+          this.startClientJoin(this.lastJoinCode).catch(() => {});
+        }
+      });
+    }
+
     // Arkadaşlarla Oyna butonuna basıldığında
     if (openFriendsRoomBtn && multiplayerModal) {
       openFriendsRoomBtn.addEventListener('click', () => {
@@ -3948,18 +4079,13 @@ class WormArenaGame {
         }
         if (clientLobbyCount) clientLobbyCount.textContent = '2';
 
-        joinStatusMsg.textContent = 'Odaya bağlanılıyor...';
+        joinStatusMsg.textContent = '';
         joinRoomSubmitBtn.disabled = true;
 
-        this.network.joinRoom(code).then(() => {
-          joinStatusMsg.textContent = '';
+        this.startClientJoin(code).then(() => {
           joinRoomSubmitBtn.disabled = false;
-          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
-          sounds.playSpecial();
-        }).catch((err) => {
-          joinStatusMsg.textContent = 'Odaya bağlanılamadı! Kodun doğruluğundan veya oda sahibinin açık olduğundan emin olun.';
+        }).catch(() => {
           joinRoomSubmitBtn.disabled = false;
-          if (waitingStatusText) waitingStatusText.textContent = '⚠️ Odaya bağlanılamadı! Kodun doğruluğunu kontrol edin.';
         });
       });
     }
@@ -4208,6 +4334,8 @@ class WormArenaGame {
           const rx = Math.round(this.worldWidth / 2 + (Math.random() - 0.5) * 600);
           const ry = Math.round(this.worldHeight / 2 + (Math.random() - 0.5) * 600);
           this.player = new Worm(rx, ry, this.getPlayerName(), skin, false);
+          this.player.peerId = 'host';
+          this.player.ghostTimer = 150;
           this.player.hat = this.equippedHat;
           this.gameOverScreen.classList.add('hidden');
           if (this.joystickZone) this.joystickZone.classList.remove('hidden');
@@ -4402,13 +4530,7 @@ class WormArenaGame {
             this.network.disconnect();
           }
 
-          this.network.joinRoom(cleanCode).then(() => {
-            if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
-            sounds.playSpecial();
-          }).catch((err) => {
-            if (waitingStatusText) waitingStatusText.textContent = '⚠️ Odaya bağlanılamadı! Oda sahibi odayı henüz kurmamış olabilir.';
-            if (waitingOwnerNotice) waitingOwnerNotice.textContent = '⚠️ Oda bağlantısı kurulamadı. Kodun doğruluğundan emin olun.';
-          });
+          this.startClientJoin(cleanCode).catch(() => {});
         };
         setTimeout(() => tryAutoJoin(0), 300);
       }

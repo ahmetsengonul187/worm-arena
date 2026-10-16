@@ -36,21 +36,26 @@ class NetworkManager {
   }
 
   // STUN & TURN Sunucu Listesi (NAT arkasındaki, Mobil 4G/5G ve Farklı Ağlardaki Oyuncuların Doğrudan veya Röle ile Kesintisiz Bağlanması için)
+  // NOT: Emülatör + aynı bilgisayardaki tarayıcı veya katı NAT arkasındaki cihazlar
+  // doğrudan (STUN) bağlanamaz; bu durumda TURN röle sunucusu ŞARTTIR.
   getIceServers() {
     return [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun.cloudflare.com:3478' },
-      { urls: 'stun:stun.relay.metered.ca:80' },
+      { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
       {
+        // Open Relay Project (ücretsiz genel TURN rölesi)
         urls: [
-          'turn:global.relay.metered.ca:80',
-          'turn:global.relay.metered.ca:443',
-          'turn:global.relay.metered.ca:443?transport=tcp'
+          'turn:openrelay.metered.ca:80',
+          'turn:openrelay.metered.ca:443',
+          'turn:openrelay.metered.ca:443?transport=tcp'
         ],
-        username: 'openrelay',
-        credential: 'openrelay'
+        username: 'openrelayproject',
+        credential: 'openrelayproject'
+      },
+      {
+        // FreeSTUN (ücretsiz genel TURN rölesi - yedek)
+        urls: ['turn:freestun.net:3478', 'turns:freestun.net:5350'],
+        username: 'free',
+        credential: 'free'
       }
     ];
   }
@@ -263,8 +268,13 @@ class NetworkManager {
     const centerY = this.game.worldHeight / 2;
     const spawnRadius = Math.min(500, 200 + count * 45);
 
-    // Host dünyasında yiyecekleri tazele (6400x6400 dev arena için 1800 yem)
-    this.game.initFoods(1800);
+    // Host dünyasında tohum tabanlı yiyecekleri tazele (Ağdan 80KB veri aktarmak yerine tohum kodu kullanılır)
+    const foodSeed = Number(this.roomCode) || Math.floor(Math.random() * 90000) + 10000;
+    if (this.game.initFoodsWithSeed) {
+      this.game.initFoodsWithSeed(foodSeed, 800);
+    } else {
+      this.game.initFoods(800);
+    }
 
     // Tüm oyuncular için merkez etrafında düzenli başlangıç noktaları oluştur
     const spawns = {};
@@ -294,13 +304,13 @@ class NetworkManager {
     const hostSp = spawns['host'] || { x: centerX, y: centerY, angle: 0 };
     this.game.startMultiplayerHostGame(includeBots, hostSp.x, hostSp.y, hostSp.angle);
 
-    // Tüm bağlı istemcilere GAME_START paketi yayınla
+    // Tüm bağlı istemcilere HAFİF ve KESİNTİSİZ GAME_START paketi yayınla (~300 bayt)
     const payload = {
       type: 'GAME_START',
       roomCode: this.roomCode,
       worldWidth: this.game.worldWidth,
       worldHeight: this.game.worldHeight,
-      foods: this.game.foods.map(f => ({ x: Math.round(f.x), y: Math.round(f.y), type: f.type })),
+      foodSeed: foodSeed,
       spawns: spawns,
       players: list
     };
@@ -309,9 +319,18 @@ class NetworkManager {
   }
 
   // ==================== 3. ODAYA KATIL (CLIENT OL) ====================
-  joinRoom(code) {
+  // Bağlantı kurulamazsa otomatik olarak 3 kez yeniden dener (TURN rölesi bazen geç cevap verir)
+  joinRoom(code, attempt = 1) {
+    const MAX_ATTEMPTS = 3;
+    const ATTEMPT_TIMEOUT_MS = 20000;
+
     return new Promise((resolve, reject) => {
       this.disconnect();
+
+      // Her deneme için benzersiz oturum: eski denemelerden gelen geç olayları yok say
+      const session = (this.joinSession = (this.joinSession || 0) + 1);
+      const isStale = () => session !== this.joinSession;
+      let settled = false;
 
       this.isHost = false;
       this.isMultiplayer = true;
@@ -326,32 +345,65 @@ class NetworkManager {
         return;
       }
 
+      if (this.onJoinStatus) {
+        this.onJoinStatus(attempt === 1
+          ? 'Oda sahibine bağlanılıyor...'
+          : `Bağlantı yeniden deneniyor (${attempt}/${MAX_ATTEMPTS})...`);
+      }
+
+      // Başarısız denemede: hak varsa yeniden dene, yoksa hata ver
+      const failAttempt = (reason, userMsg, title) => {
+        if (settled || isStale()) return;
+        settled = true;
+        clearTimeout(connTimeout);
+        console.warn(`Katılma denemesi ${attempt} başarısız:`, reason);
+
+        if (attempt < MAX_ATTEMPTS) {
+          setTimeout(() => {
+            if (isStale()) return;
+            this.joinRoom(code, attempt + 1).then(resolve).catch(reject);
+          }, 1200);
+          return;
+        }
+
+        if (window.showInGameAlert) {
+          window.showInGameAlert(userMsg, 'warning', title);
+        }
+        this.disconnect();
+        if (this.onError) this.onError(reason);
+        reject(reason instanceof Error ? reason : new Error(String(reason)));
+      };
+
       this.peer = new Peer({
         debug: 1,
         config: {
           iceServers: this.getIceServers(),
-          sdpSemantics: 'unified-plan'
+          sdpSemantics: 'unified-plan',
+          iceCandidatePoolSize: 4
         }
       });
 
-      let connTimeout = setTimeout(() => {
+      const connTimeout = setTimeout(() => {
         if (!this.hostConn || !this.hostConn.open) {
-          if (window.showInGameAlert) {
-            window.showInGameAlert('Odaya bağlanma zaman aşımına uğradı. Oda kodunu kontrol edin veya oda sahibinin açık olduğundan emin olun.', 'warning', '⚠️ BAĞLANTI ZAMAN AŞIMI');
-          }
-          this.disconnect();
-          reject(new Error('Bağlantı zaman aşımı'));
+          failAttempt(
+            new Error('Bağlantı zaman aşımı'),
+            'Oda sahibine ulaşılamadı. Oda sahibinin uygulamasının açık ve odanın kurulu olduğundan emin olup tekrar deneyin.',
+            '⚠️ BAĞLANTI ZAMAN AŞIMI'
+          );
         }
-      }, 14000);
+      }, ATTEMPT_TIMEOUT_MS);
 
       this.peer.on('open', (id) => {
+        if (isStale()) return;
         this.myPeerId = id;
         console.log('İstemci Peer oluşturuldu:', id);
 
-        // Güvenilir (reliable: true) veri kanalı ile host'a bağlan
+        // Güvenilir veri kanalı ile host'a bağlan
         const conn = this.peer.connect(targetHostId, { reliable: true });
 
         conn.on('open', () => {
+          if (isStale() || settled) return;
+          settled = true;
           clearTimeout(connTimeout);
           this.hostConn = conn;
           console.log('Odaya başarıyla bağlandı!');
@@ -372,16 +424,17 @@ class NetworkManager {
         });
 
         conn.on('data', (data) => {
+          if (isStale()) return;
           this.handleHostMessage(data);
         });
 
         conn.on('close', () => {
-          clearTimeout(connTimeout);
+          if (isStale() || this.hostConn !== conn) return;
           console.warn('Oda sahibi ile bağlantı kesildi');
           if (window.showInGameAlert) {
             window.showInGameAlert('Oda bağlantısı kesildi. Menüye dönülüyor...', 'warning', '⚠️ BAĞLANTI KOPTU');
           }
-          // Hemen lınk diye oyundan atmak yerine 3 sn bekle
+          // Hemen oyundan atmak yerine 3 sn bekle
           setTimeout(() => {
             if (this.game && this.game.state === 'PLAYING') {
               this.game.returnToMenu();
@@ -390,27 +443,19 @@ class NetworkManager {
         });
 
         conn.on('error', (err) => {
-          clearTimeout(connTimeout);
-          console.error('Bağlantı hatası:', err);
-          if (window.showInGameAlert) {
-            window.showInGameAlert('Oda sahibine bağlanırken hata oluştu.', 'warning', '⚠️ BAĞLANTI HATASI');
-          }
-          reject(err);
+          failAttempt(err, 'Oda sahibine bağlanırken hata oluştu. Lütfen tekrar deneyin.', '⚠️ BAĞLANTI HATASI');
         });
       });
 
       this.peer.on('error', (err) => {
-        clearTimeout(connTimeout);
         console.error('Odaya bağlanılamadı:', err);
-        let msg = 'Odaya bağlanılamadı. Kodun doğruluğunu kontrol edin.';
-        if (err.type === 'peer-unavailable') {
-          msg = `"${this.roomCode}" kodlu oda bulunamadı! Oda sahibinin odayı kurduğundan emin olun.`;
+        let msg = 'Odaya bağlanılamadı. İnternet bağlantınızı kontrol edin.';
+        let title = '⚠️ BAĞLANTI HATASI';
+        if (err && err.type === 'peer-unavailable') {
+          msg = `"${this.roomCode}" kodlu oda bulunamadı! Oda sahibinin odayı kurduğundan ve uygulamanın açık olduğundan emin olun.`;
+          title = '⚠️ ODA BULUNAMADI';
         }
-        if (window.showInGameAlert) {
-          window.showInGameAlert(msg, 'warning', '⚠️ ODA BULUNAMADI');
-        }
-        if (this.onError) this.onError(err);
-        reject(err);
+        failAttempt(err, msg, title);
       });
     });
   }
@@ -429,11 +474,23 @@ class NetworkManager {
       this.game.worldWidth = data.worldWidth || 6400;
       this.game.worldHeight = data.worldHeight || 6400;
 
-      if (data.foods) {
+      // Bekleme odasını ve çok oyunculu modalı hemen kapat
+      const multiplayerModal = document.getElementById('multiplayerModal');
+      if (multiplayerModal) {
+        multiplayerModal.classList.add('hidden');
+        multiplayerModal.style.display = 'none';
+      }
+
+      // Tohum tabanlı yiyecekleri başlat
+      if (data.foodSeed && this.game.initFoodsWithSeed) {
+        this.game.initFoodsWithSeed(data.foodSeed, 800);
+      } else if (data.foods) {
         this.game.foods = data.foods.map(f => {
           const foodDef = (typeof FOOD_TYPES !== 'undefined' && FOOD_TYPES.find(ft => ft.type === f.type)) || FOOD_TYPES[0];
           return { x: f.x, y: f.y, ...foodDef, pulse: Math.random() * Math.PI * 2 };
         });
+      } else {
+        this.game.initFoods(800);
       }
 
       // Kendi başlangıç noktamı bul
@@ -471,7 +528,7 @@ class NetworkManager {
         this.game.player.isDead = false;
         this.game.player.ghostTimer = 150;
         this.game.player.body = [{ x: data.x, y: data.y }, { x: data.x - 10, y: data.y }];
-        this.game.player.score = 25;
+        this.game.player.score = 30;
         this.game.gameOverScreen.classList.add('hidden');
         if (this.game.joystickZone) this.game.joystickZone.classList.remove('hidden');
         this.game.state = 'PLAYING';
@@ -493,20 +550,19 @@ class NetworkManager {
           this.game.player.radius = wData.radius;
 
           // Yumuşak Konum Uzlaşması (Smooth Client Position Reconciliation)
-          // DİKKAT: targetAngle ve angle ASLA sunucu tarafından ezilmez!
-          // İstemci kendi yönünün yerel otoritesidir; bu sayede tarayıcıda yılan ASLA donmaz veya kilitlenmez!
+          // Yılanın geriye sıçramasını (rubber-banding) önlemek için eşik artırıldı ve kademe yumuşatıldı
           const dx = wData.x - this.game.player.x;
           const dy = wData.y - this.game.player.y;
           const distSq = dx * dx + dy * dy;
 
-          if (distSq > 40000) {
-            // Ciddi kayma veya respawn: doğrudan eşitle
+          if (distSq > 122500) {
+            // Sadece devasa sapma (350px üzeri) durumunda doğrudan eşitle
             this.game.player.x = wData.x;
             this.game.player.y = wData.y;
-          } else if (distSq > 36) {
-            // Küçük ağ gecikmesi: kademeli olarak yumuşak kaydır
-            this.game.player.x += dx * 0.18;
-            this.game.player.y += dy * 0.18;
+          } else if (distSq > 64) {
+            // Küçük ağ gecikmesi: kademeli yumuşak kaydır
+            this.game.player.x += dx * 0.08;
+            this.game.player.y += dy * 0.08;
           }
         } else {
           // UZAKTAKİ ARKADAŞ VEYA BOT
@@ -519,21 +575,18 @@ class NetworkManager {
             this.remotePlayers.set(wData.peerId, worm);
           }
           worm.targetAngle = wData.angle;
+          worm.angle = wData.angle;
           const rdx = wData.x - worm.x;
           const rdy = wData.y - worm.y;
-          if (rdx * rdx + rdy * rdy > 6400) {
+          if (rdx * rdx + rdy * rdy > 10000) {
             worm.x = wData.x;
             worm.y = wData.y;
-            worm.angle = wData.angle;
-            if (wData.body && wData.body.length > 0) {
-              worm.body = wData.body;
-            }
           } else {
             worm.x += rdx * 0.35;
             worm.y += rdy * 0.35;
-            if (wData.body && wData.body.length > 0 && (Math.abs(worm.body.length - wData.body.length) > 2 || !worm.body.length)) {
-              worm.body = wData.body;
-            }
+          }
+          if (wData.body && wData.body.length > 0) {
+            worm.body = wData.body;
           }
           worm.radius = wData.radius;
           worm.score = wData.score;
