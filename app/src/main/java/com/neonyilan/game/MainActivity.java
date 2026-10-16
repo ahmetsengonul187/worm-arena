@@ -53,7 +53,9 @@ public class MainActivity extends AppCompatActivity {
 
             webView.setWebViewClient(new WebViewClient() {
                 @Override
-                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                public boolean shouldOverrideUrlLoading(WebView view,
+
+                                                        WebResourceRequest request) {
                     if (request != null && request.getUrl() != null) {
                         return handleUrl(request.getUrl().toString());
                     }
