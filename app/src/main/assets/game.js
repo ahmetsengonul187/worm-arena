@@ -817,15 +817,16 @@ class Worm {
 
     this.angle = Math.random() * Math.PI * 2;
     this.targetAngle = this.angle;
-    this.turnSpeed = 0.135;
+    this.turnSpeed = 0.125;
 
-    this.baseSpeed = 6.5;
-    this.boostSpeed = 10.8;
+    // Hız Dengesi (Tarayıcı ve Mobil için optimize edilmiş akıcı ve kontrollü hız)
+    this.baseSpeed = 4.3; // Daha dengeli ve kontrollü normal hız
+    this.boostSpeed = 7.5; // Kontrol edilebilir etkili turbo hızı
     this.speed = this.baseSpeed;
     this.isBoosting = false;
 
     this.radius = 16;
-    this.spacing = 8.5;
+    this.spacing = 7.5;
     this.score = 30;
     this.kills = 0;
     this.isDead = false;
@@ -3120,26 +3121,87 @@ class WormArenaGame {
     }
   }
 
+  // Satranç Koordinatı Hesaplayıcı (8x8 Izgara: A1 - H8)
+  getChessCoord(x, y) {
+    const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const colSize = this.worldWidth / 8; // 3200 / 8 = 400px
+    const rowSize = this.worldHeight / 8; // 3200 / 8 = 400px
+    const colIndex = Math.max(0, Math.min(7, Math.floor(x / colSize)));
+    const rowIndex = Math.max(0, Math.min(7, Math.floor(y / rowSize)));
+    return {
+      code: `${cols[colIndex]}${rowIndex + 1}`,
+      col: cols[colIndex],
+      row: rowIndex + 1,
+      colIndex,
+      rowIndex
+    };
+  }
+
   drawArenaPattern(w, h) {
-    const tileSize = 90; // 90px: Çizgi sayısını %50 azaltır, arka planı akıcı yapar
+    const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const sectorSize = 400; // 8x8 Satranç karesi: her kare 400x400 piksel
+
+    // 1. İnce Arka Plan Kareleri (90px)
+    const tileSize = 90;
     const startX = Math.floor(this.camera.x / tileSize) * tileSize;
     const startY = Math.floor(this.camera.y / tileSize) * tileSize;
 
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
     this.ctx.lineWidth = 1;
     this.ctx.beginPath();
-
     for (let x = startX - tileSize; x < startX + w + tileSize; x += tileSize) {
-      const screenX = x - this.camera.x;
-      this.ctx.moveTo(screenX, 0);
-      this.ctx.lineTo(screenX, h);
+      const sx = x - this.camera.x;
+      this.ctx.moveTo(sx, 0); this.ctx.lineTo(sx, h);
     }
     for (let y = startY - tileSize; y < startY + h + tileSize; y += tileSize) {
-      const screenY = y - this.camera.y;
-      this.ctx.moveTo(0, screenY);
-      this.ctx.lineTo(w, screenY);
+      const sy = y - this.camera.y;
+      this.ctx.moveTo(0, sy); this.ctx.lineTo(w, sy);
     }
     this.ctx.stroke();
+
+    // 2. Satranç Tahtası Sektör Çizgileri (Her 400px'te belirgin hat)
+    const secStartX = Math.floor(this.camera.x / sectorSize) * sectorSize;
+    const secStartY = Math.floor(this.camera.y / sectorSize) * sectorSize;
+
+    this.ctx.strokeStyle = 'rgba(0, 240, 255, 0.12)';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    for (let x = secStartX; x <= secStartX + w + sectorSize; x += sectorSize) {
+      if (x >= 0 && x <= this.worldWidth) {
+        const sx = x - this.camera.x;
+        this.ctx.moveTo(sx, 0); this.ctx.lineTo(sx, h);
+      }
+    }
+    for (let y = secStartY; y <= secStartY + h + sectorSize; y += sectorSize) {
+      if (y >= 0 && y <= this.worldHeight) {
+        const sy = y - this.camera.y;
+        this.ctx.moveTo(0, sy); this.ctx.lineTo(w, sy);
+      }
+    }
+    this.ctx.stroke();
+
+    // 3. Ekrana Düşen Satranç Sektörlerinin Zemin Filigranları (A1, B2, D4, E5...)
+    this.ctx.font = '900 68px "Outfit", sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
+    const minCol = Math.max(0, Math.floor((this.camera.x - 200) / sectorSize));
+    const maxCol = Math.min(7, Math.floor((this.camera.x + w + 200) / sectorSize));
+    const minRow = Math.max(0, Math.floor((this.camera.y - 200) / sectorSize));
+    const maxRow = Math.min(7, Math.floor((this.camera.y + h + 200) / sectorSize));
+
+    for (let c = minCol; c <= maxCol; c++) {
+      for (let r = minRow; r <= maxRow; r++) {
+        const cx = c * sectorSize + sectorSize / 2 - this.camera.x;
+        const cy = r * sectorSize + sectorSize / 2 - this.camera.y;
+        const coordLabel = `${cols[c]}${r + 1}`;
+
+        // Merkez 4 kare (D4, D5, E4, E5) hafif altın sarısı parlar
+        const isCenter = (c === 3 || c === 4) && (r === 3 || r === 4);
+        this.ctx.fillStyle = isCenter ? 'rgba(255, 215, 0, 0.08)' : 'rgba(255, 255, 255, 0.04)';
+        this.ctx.fillText(coordLabel, cx, cy);
+      }
+    }
   }
 
   drawWorldBorders() {
@@ -3153,7 +3215,6 @@ class WormArenaGame {
       return;
     }
 
-    // shadowBlur yerine donanım dostu çift katmanlı neon hat
     this.ctx.strokeStyle = 'rgba(255, 51, 102, 0.35)';
     this.ctx.lineWidth = 12;
     this.ctx.strokeRect(left, top, this.worldWidth, this.worldHeight);
@@ -3161,6 +3222,38 @@ class WormArenaGame {
     this.ctx.strokeStyle = '#ff3366';
     this.ctx.lineWidth = 4;
     this.ctx.strokeRect(left, top, this.worldWidth, this.worldHeight);
+
+    // Duvar Kenarlarında Satranç Harf ve Sayı Göstergeleri
+    const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    this.ctx.font = 'bold 22px Outfit, sans-serif';
+    this.ctx.fillStyle = 'rgba(255, 51, 102, 0.7)';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+
+    for (let c = 0; c < 8; c++) {
+      const x = c * 400 + 200 - this.camera.x;
+      // Üst Duvar
+      if (top > -30 && top < h + 30 && x > -50 && x < w + 50) {
+        this.ctx.fillText(`SEKTÖR ${cols[c]}`, x, top + 22);
+      }
+      // Alt Duvar
+      const bottom = top + this.worldHeight;
+      if (bottom > -30 && bottom < h + 30 && x > -50 && x < w + 50) {
+        this.ctx.fillText(`SEKTÖR ${cols[c]}`, x, bottom - 22);
+      }
+    }
+    for (let r = 0; r < 8; r++) {
+      const y = r * 400 + 200 - this.camera.y;
+      // Sol Duvar
+      if (left > -30 && left < w + 30 && y > -50 && y < h + 50) {
+        this.ctx.fillText(`HAT ${r + 1}`, left + 30, y);
+      }
+      // Sağ Duvar
+      const right = left + this.worldWidth;
+      if (right > -30 && right < w + 30 && y > -50 && y < h + 50) {
+        this.ctx.fillText(`HAT ${r + 1}`, right - 30, y);
+      }
+    }
   }
 
   drawFoods() {
@@ -3222,25 +3315,68 @@ class WormArenaGame {
   }
 
   drawMinimap(allWorms) {
-    const mw = 120;
-    const mh = 120;
+    const mw = 128;
+    const mh = 128;
     if (this.minimapCanvas.width !== mw || this.minimapCanvas.height !== mh) {
       this.minimapCanvas.width = mw;
       this.minimapCanvas.height = mh;
     }
     this.minimapCtx.clearRect(0, 0, mw, mh);
 
-    // Radar Arka Planı (Siber Dairesel Izgara)
-    this.minimapCtx.fillStyle = 'rgba(6, 10, 22, 0.94)';
-    this.minimapCtx.fillRect(0, 0, mw, mh);
+    const cols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+    const sqSize = mw / 8; // 16px her satranç karesi
 
-    // Radar Eksen Çizgileri
-    this.minimapCtx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
-    this.minimapCtx.lineWidth = 1;
+    // 8x8 Satranç Tahtası Izgarası
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const isDark = (r + c) % 2 === 1;
+        this.minimapCtx.fillStyle = isDark ? 'rgba(8, 12, 24, 0.95)' : 'rgba(16, 24, 46, 0.95)';
+        this.minimapCtx.fillRect(c * sqSize, r * sqSize, sqSize, sqSize);
+      }
+    }
+
+    // Merkez 4 Kare (D4, D5, E4, E5) Altın Vurgusu
+    this.minimapCtx.fillStyle = 'rgba(255, 215, 0, 0.12)';
+    this.minimapCtx.fillRect(3 * sqSize, 3 * sqSize, 2 * sqSize, 2 * sqSize);
+
+    // Satranç Izgara Çizgileri
+    this.minimapCtx.strokeStyle = 'rgba(0, 240, 255, 0.18)';
+    this.minimapCtx.lineWidth = 0.8;
     this.minimapCtx.beginPath();
-    this.minimapCtx.moveTo(mw / 2, 0); this.minimapCtx.lineTo(mw / 2, mh);
-    this.minimapCtx.moveTo(0, mh / 2); this.minimapCtx.lineTo(mw / mh, mh);
+    for (let i = 0; i <= 8; i++) {
+      const pos = i * sqSize;
+      this.minimapCtx.moveTo(pos, 0); this.minimapCtx.lineTo(pos, mh);
+      this.minimapCtx.moveTo(0, pos); this.minimapCtx.lineTo(mw, pos);
+    }
     this.minimapCtx.stroke();
+
+    // Satranç Koordinat Harf ve Sayıları (Üstte A-H, Solda 1-8)
+    this.minimapCtx.font = 'bold 7px Outfit, sans-serif';
+    this.minimapCtx.textAlign = 'center';
+    this.minimapCtx.textBaseline = 'middle';
+    this.minimapCtx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+
+    for (let c = 0; c < 8; c++) {
+      this.minimapCtx.fillText(cols[c], c * sqSize + sqSize / 2, 5);
+    }
+    for (let r = 0; r < 8; r++) {
+      this.minimapCtx.fillText((r + 1).toString(), 5, r * sqSize + sqSize / 2);
+    }
+
+    // Oyuncunun bulunduğu kareyi minimap üzerinde fosforlu neon ile vurgula
+    if (this.player && !this.player.isDead) {
+      const pCoord = this.getChessCoord(this.player.x, this.player.y);
+      this.minimapCtx.fillStyle = 'rgba(0, 255, 136, 0.22)';
+      this.minimapCtx.fillRect(pCoord.colIndex * sqSize, pCoord.rowIndex * sqSize, sqSize, sqSize);
+      this.minimapCtx.strokeStyle = '#00ff88';
+      this.minimapCtx.lineWidth = 1.2;
+      this.minimapCtx.strokeRect(pCoord.colIndex * sqSize + 0.5, pCoord.rowIndex * sqSize + 0.5, sqSize - 1, sqSize - 1);
+
+      const coordBadge = document.getElementById('minimapCoordBadge');
+      if (coordBadge) {
+        coordBadge.textContent = `📍 ${pCoord.code}`;
+      }
+    }
 
     const scaleX = mw / this.worldWidth;
     const scaleY = mh / this.worldHeight;
@@ -3504,6 +3640,9 @@ class WormArenaGame {
         if (waitingRoomCodeVal && (roomCode || this.network.roomCode)) {
           waitingRoomCodeVal.textContent = roomCode || this.network.roomCode;
         }
+        if (waitingStatusText) {
+          waitingStatusText.textContent = 'Oda sahibinin arenayı başlatması bekleniyor...';
+        }
       }
     };
 
@@ -3704,7 +3843,7 @@ class WormArenaGame {
           if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
 
           if (waitingRoomCodeVal) waitingRoomCodeVal.textContent = code;
-          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibi oyunu başlatmayı bekleniyor...';
+          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibinin arenayı başlatması bekleniyor...';
 
           sounds.playSpecial();
         }).catch((err) => {

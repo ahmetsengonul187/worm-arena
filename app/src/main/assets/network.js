@@ -118,10 +118,20 @@ class NetworkManager {
 
   // Gelen arkadaş bağlantısını karşıla (Host tarafı)
   handleIncomingConnection(conn) {
-    conn.on('open', () => {
+    const onConnOpen = () => {
       this.connections.set(conn.peer, conn);
       console.log('Arkadaş bağlandı:', conn.peer);
-    });
+      // Bağlanan istemciye anında güncel lobi durumunu yay
+      if (this.game.state !== 'PLAYING') {
+        this.broadcastLobbyState();
+      }
+    };
+
+    if (conn.open) {
+      onConnOpen();
+    } else {
+      conn.on('open', onConnOpen);
+    }
 
     conn.on('data', (data) => {
       this.handleClientMessage(conn.peer, data);

@@ -103,10 +103,10 @@
       </div>
     </header>
 
-    <!-- Radar / Mini Harita -->
-    <div class="minimap-container">
-      <canvas id="minimapCanvas" width="100" height="100"></canvas>
-      <div class="minimap-label">ARENA</div>
+    <!-- Radar / Mini Harita (Satranç Tahtası Sektörleri) -->
+    <div class="minimap-container" title="Satranç Tahtası Radar">
+      <canvas id="minimapCanvas" width="128" height="128"></canvas>
+      <div class="minimap-label" id="minimapCoordBadge">📍 D4</div>
     </div>
 
     <!-- Hızlı Canlı Emoji Çubuğu -->
@@ -281,10 +281,10 @@
             <p class="code-tip">✨ Arkadaşların bu linke tıkladığında doğrudan tarayıcıdan odana katılır ve beklemeye geçer!</p>
           </div>
 
-          <!-- Canlı Lobi Oyuncu Listesi (Host Görünümü) -->
+          <!-- Canlı Lobi Oyuncu Listesi (Host Görünümü: Hazır Olanlar Listesi) -->
           <div class="lobby-players-box">
             <div class="lobby-header-row">
-              <span class="lobby-title">Odada Bekleyenler (<span id="lobbyCount">1</span>):</span>
+              <span class="lobby-title">👥 Hazır Olan Oyuncular (<span id="lobbyCount">1</span>):</span>
               <span class="lobby-live-badge" id="lobbyStatusBadge">🟢 Lobi Aktif</span>
             </div>
             <ul class="lobby-list" id="lobbyList">
@@ -304,7 +304,7 @@
           <button class="play-btn-large glow-pulse" id="startRoomGameBtn">
             <span id="startRoomGameBtnText">ARENAYI BAŞLAT 🚀</span>
           </button>
-          <p class="lobby-host-hint">💡 Butona bastığında odadaki bütün arkadaşların aynı anda oyuna başlayacaktır.</p>
+          <p class="lobby-host-hint">💡 'Arenayı Başlat' butonuna bastığında odadaki bütün oyuncular aynı anda oyuna başlayacaktır.</p>
         </div>
 
         <!-- 2. ODAYA KATILMA BÖLÜMÜ -->
@@ -331,13 +331,13 @@
             </div>
             <div class="waiting-pulse-banner">
               <span class="waiting-pulse-dot"></span>
-              <span id="waitingStatusText">Oda sahibi oyunu başlatmayı bekleniyor...</span>
+              <span id="waitingStatusText">Oda sahibinin arenayı başlatması bekleniyor...</span>
             </div>
           </div>
 
           <div class="lobby-players-box">
             <div class="lobby-header-row">
-              <span class="lobby-title">Odada Bekleyenler (<span id="clientLobbyCount">1</span>):</span>
+              <span class="lobby-title">👥 Bekleme Listesi (<span id="clientLobbyCount">1</span>):</span>
               <span class="lobby-live-badge waiting">⏳ Başlama Bekleniyor</span>
             </div>
             <ul class="lobby-list" id="clientLobbyList">
@@ -351,7 +351,7 @@
 
           <div class="waiting-notice-box">
             <span class="waiting-notice-icon">🎮</span>
-            <span class="waiting-notice-text">Oda sahibi "Arenayı Başlat" dediği an oyun herkes için aynı anda başlayacaktır. Lütfen ayrılmadan bekleyin!</span>
+            <span class="waiting-notice-text">Oda sahibi "Arenayı Başlat" butonuna bastığı an oyununuz otomatik başlayacaktır. Lütfen ayrılmadan bekleyin!</span>
           </div>
 
           <button class="room-btn-danger" id="clientLeaveRoomBtn">
