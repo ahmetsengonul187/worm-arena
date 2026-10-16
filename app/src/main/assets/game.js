@@ -817,16 +817,16 @@ class Worm {
 
     this.angle = Math.random() * Math.PI * 2;
     this.targetAngle = this.angle;
-    this.turnSpeed = 0.125;
+    this.turnSpeed = 0.13;
 
-    // Hız Dengesi (Tarayıcı ve Mobil için optimize edilmiş akıcı ve kontrollü hız)
-    this.baseSpeed = 4.3; // Daha dengeli ve kontrollü normal hız
-    this.boostSpeed = 7.5; // Kontrol edilebilir etkili turbo hızı
+    // Hız Dengesi (Hızlı, akıcı ve keyifli ideal hız)
+    this.baseSpeed = 5.2; // İdeal kıvrak ve akıcı normal hız
+    this.boostSpeed = 8.8; // Etkili ve tatmin edici turbo hızı
     this.speed = this.baseSpeed;
     this.isBoosting = false;
 
     this.radius = 16;
-    this.spacing = 7.5;
+    this.spacing = 8.0;
     this.score = 30;
     this.kills = 0;
     this.isDead = false;
