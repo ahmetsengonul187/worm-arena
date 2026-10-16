@@ -335,13 +335,13 @@
             </div>
             <div class="waiting-pulse-banner">
               <span class="waiting-pulse-dot"></span>
-              <span id="waitingStatusText">Oda sahibinin arenayı başlatması bekleniyor...</span>
+              <span id="waitingStatusText">Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız</span>
             </div>
           </div>
 
           <div class="lobby-players-box">
             <div class="lobby-header-row">
-              <span class="lobby-title">👥 Bekleme Listesi (<span id="clientLobbyCount">1</span>):</span>
+              <span class="lobby-title">👥 Odadaki Oyuncular (<span id="clientLobbyCount">1</span>):</span>
               <span class="lobby-live-badge waiting">⏳ Başlama Bekleniyor</span>
             </div>
             <ul class="lobby-list" id="clientLobbyList">
@@ -353,9 +353,14 @@
             </ul>
           </div>
 
+          <div class="waiting-loading-banner">
+            <div class="waiting-spinner-small"></div>
+            <span class="waiting-loading-msg" id="waitingOwnerNotice">Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız</span>
+          </div>
+
           <div class="waiting-notice-box">
             <span class="waiting-notice-icon">🎮</span>
-            <span class="waiting-notice-text">Oda sahibi "Arenayı Başlat" butonuna bastığı an oyununuz otomatik başlayacaktır. Lütfen ayrılmadan bekleyin!</span>
+            <span class="waiting-notice-text">Oda sahibi "Arenayı Başlat" butonuna bastığı an oyununuz otomatik olarak başlayacaktır. Lütfen ayrılmadan bekleyin!</span>
           </div>
 
           <button class="room-btn-danger" id="clientLeaveRoomBtn">

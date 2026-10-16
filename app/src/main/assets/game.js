@@ -1897,6 +1897,7 @@ class WormArenaGame {
     const cy = spawnY !== null ? spawnY : (this.worldHeight / 2 + (Math.random() - 0.5) * 400);
 
     this.player = new Worm(cx, cy, playerName, skin, false);
+    this.player.peerId = 'host';
     this.player.hat = this.equippedHat;
     this.player.angle = spawnAngle;
     this.player.targetAngle = spawnAngle;
@@ -1943,10 +1944,15 @@ class WormArenaGame {
     const sa = mySpawn ? mySpawn.angle : 0;
 
     this.player = new Worm(sx, sy, playerName, skin, false);
+    this.player.peerId = this.network.myPeerId;
     this.player.hat = this.equippedHat;
     this.player.angle = sa;
     this.player.targetAngle = sa;
     this.player.ghostTimer = 150; // Başlangıç koruması (2.5 sn hasarsızlık)
+
+    // Kamerayı anında oyuncunun üzerine getir
+    this.camera.x = this.player.x - window.innerWidth / 2;
+    this.camera.y = this.player.y - window.innerHeight / 2;
 
     this.bots = [];
     this.state = 'PLAYING';
@@ -1976,6 +1982,9 @@ class WormArenaGame {
     const by = Math.random() * (this.worldHeight - 300) + 150;
 
     const bot = new Worm(bx, by, botName, botSkin, true);
+    bot.botId = index;
+    bot.peerId = `bot_${index}_${Math.floor(Math.random() * 10000)}`;
+    bot.ghostTimer = 150;
     bot.score = Math.floor(Math.random() * 80) + 30;
     // Botlara da rastgele şapka ver
     if (Math.random() < 0.6) {
@@ -2090,9 +2099,9 @@ class WormArenaGame {
         rw.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
       }
 
-      // İstemci tarafında da anlık kafa-gövde çarpışmalarını kontrol et (sıfır gecikmeli ezilme)
-      this.checkWormCollisions(allWorms);
-      if (this.state !== 'PLAYING') return;
+      // DİKKAT: İstemci tarafında checkWormCollisions ÇALIŞTIRILMAZ!
+      // Tüm kafa-gövde çarpışma ve ezilme kontrollerini otoriter olarak Oda Sahibi (Host) hesaplar
+      // ve ağ paketi (GAME_TICK -> wData.isDead) ile bildirir. Bu sayede istemci asla hayalet gövdelere çarpıp haksız yere ezilmez!
 
       this.camera.x += (this.player.x - window.innerWidth / 2 - this.camera.x) * 0.15;
       this.camera.y += (this.player.y - window.innerHeight / 2 - this.camera.y) * 0.15;
@@ -3666,6 +3675,12 @@ class WormArenaGame {
         }
       } else {
         // İSTEMCİ (CLIENT) GÖRÜNÜMÜ: Odaya katılan arkadaş bekleme odasında lobiyi izler
+        if (multiplayerModal) multiplayerModal.classList.remove('hidden');
+        if (roomTabsBar) roomTabsBar.classList.add('hidden');
+        if (createRoomContent) createRoomContent.classList.add('hidden');
+        if (joinRoomContent) joinRoomContent.classList.add('hidden');
+        if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
+
         if (clientLobbyList) {
           clientLobbyList.innerHTML = '';
           players.forEach((p) => {
@@ -3690,7 +3705,11 @@ class WormArenaGame {
           waitingRoomCodeVal.textContent = roomCode || this.network.roomCode;
         }
         if (waitingStatusText) {
-          waitingStatusText.textContent = 'Oda sahibinin arenayı başlatması bekleniyor...';
+          waitingStatusText.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+        }
+        const waitingOwnerNotice = document.getElementById('waitingOwnerNotice');
+        if (waitingOwnerNotice) {
+          waitingOwnerNotice.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
         }
       }
     };
@@ -3874,21 +3893,16 @@ class WormArenaGame {
     if (joinRoomSubmitBtn && joinRoomCodeInput && joinStatusMsg) {
       joinRoomSubmitBtn.addEventListener('click', () => {
         const joinPlayerNameInput = document.getElementById('joinPlayerNameInput');
-        const customName = joinPlayerNameInput ? joinPlayerNameInput.value.trim() : '';
+        let customName = joinPlayerNameInput ? joinPlayerNameInput.value.trim() : '';
 
-        // 1. Önce Oyuncu Adını Doğrula
+        // İsim girilmediyse kayıtlı veya otomatik isim oluştur
         if (!customName || customName.length === 0) {
-          if (joinPlayerNameInput) {
-            joinPlayerNameInput.focus();
-            joinPlayerNameInput.classList.add('input-error-shake');
-            setTimeout(() => joinPlayerNameInput.classList.remove('input-error-shake'), 600);
-          }
-          joinStatusMsg.textContent = '⚠️ Lütfen önce oyundaki adınızı yazınız!';
-          if (window.showInGameAlert) {
-            window.showInGameAlert('Lütfen odaya girmeden önce adınızı yazınız!', 'warning', '⚠️ İSİM GEREKLİ');
-          }
-          return;
+          customName = this.getPlayerName();
         }
+        if (!customName || customName.length === 0) {
+          customName = `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
+        }
+        if (joinPlayerNameInput) joinPlayerNameInput.value = customName;
 
         // Oyuncu adını kaydet ve ana isim alanıyla senkronize et
         localStorage.setItem('worm_player_name', customName);
@@ -3907,26 +3921,45 @@ class WormArenaGame {
           this.network.disconnect();
         }
 
+        // Doğrudan bekleme odası ekranına geçir
+        if (roomTabsBar) roomTabsBar.classList.add('hidden');
+        if (createRoomContent) createRoomContent.classList.add('hidden');
+        if (joinRoomContent) joinRoomContent.classList.add('hidden');
+        if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
+
+        if (waitingRoomCodeVal) waitingRoomCodeVal.textContent = code;
+        if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+        const waitingOwnerNotice = document.getElementById('waitingOwnerNotice');
+        if (waitingOwnerNotice) waitingOwnerNotice.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+
+        if (clientLobbyList) {
+          clientLobbyList.innerHTML = `
+            <li class="lobby-item is-host">
+              <span class="lobby-player-icon">👑</span>
+              <span class="lobby-player-name">Oda Sahibi</span>
+              <span class="lobby-ready-badge leader">LİDER</span>
+            </li>
+            <li class="lobby-item">
+              <span class="lobby-player-icon">🟢</span>
+              <span class="lobby-player-name">${this.escapeHtml(customName)} (Sen)</span>
+              <span class="lobby-ready-badge">BAĞLANIYOR</span>
+            </li>
+          `;
+        }
+        if (clientLobbyCount) clientLobbyCount.textContent = '2';
+
         joinStatusMsg.textContent = 'Odaya bağlanılıyor...';
         joinRoomSubmitBtn.disabled = true;
 
         this.network.joinRoom(code).then(() => {
           joinStatusMsg.textContent = '';
           joinRoomSubmitBtn.disabled = false;
-
-          // Başarıyla bağlandı: Bekleme odası görünümünü aktif et!
-          if (roomTabsBar) roomTabsBar.classList.add('hidden');
-          if (createRoomContent) createRoomContent.classList.add('hidden');
-          if (joinRoomContent) joinRoomContent.classList.add('hidden');
-          if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
-
-          if (waitingRoomCodeVal) waitingRoomCodeVal.textContent = code;
-          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibinin arenayı başlatması bekleniyor...';
-
+          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
           sounds.playSpecial();
         }).catch((err) => {
           joinStatusMsg.textContent = 'Odaya bağlanılamadı! Kodun doğruluğundan veya oda sahibinin açık olduğundan emin olun.';
           joinRoomSubmitBtn.disabled = false;
+          if (waitingStatusText) waitingStatusText.textContent = '⚠️ Odaya bağlanılamadı! Kodun doğruluğunu kontrol edin.';
         });
       });
     }
@@ -4296,7 +4329,7 @@ class WormArenaGame {
     return `${defaultPublicUrl}/?oda=${code}`;
   }
 
-  // Sayfa açıldığında URL parametresinde (?oda=8532) varsa otomatik odaya bağlan
+  // Sayfa açıldığında URL parametresinde (?oda=8532) varsa doğrudan Bekleme Odasını Aç ve Bağlan
   checkUrlRoomInvite() {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -4308,28 +4341,76 @@ class WormArenaGame {
             setTimeout(() => tryAutoJoin(attempts + 1), 200);
             return;
           }
-          const nameInput = document.getElementById('playerNameInput');
-          if (nameInput && !nameInput.value.trim()) {
-            nameInput.value = `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
+
+          let myName = localStorage.getItem('worm_player_name');
+          if (!myName || !myName.trim()) {
+            myName = `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
+            localStorage.setItem('worm_player_name', myName);
           }
+          const nameInput = document.getElementById('playerNameInput');
+          if (nameInput) nameInput.value = myName;
+
+          const joinPlayerNameInput = document.getElementById('joinPlayerNameInput');
+          if (joinPlayerNameInput) joinPlayerNameInput.value = myName;
 
           const multiplayerModal = document.getElementById('multiplayerModal');
-          const tabJoinRoom = document.getElementById('tabJoinRoom');
+          const roomTabsBar = document.getElementById('roomTabsBar');
+          const createRoomContent = document.getElementById('createRoomTabContent');
+          const joinRoomContent = document.getElementById('joinRoomTabContent');
+          const waitingRoomContent = document.getElementById('waitingRoomTabContent');
+          const waitingRoomCodeVal = document.getElementById('waitingRoomCodeVal');
+          const waitingStatusText = document.getElementById('waitingStatusText');
+          const waitingOwnerNotice = document.getElementById('waitingOwnerNotice');
+          const clientLobbyList = document.getElementById('clientLobbyList');
+          const clientLobbyCount = document.getElementById('clientLobbyCount');
           const joinRoomCodeInput = document.getElementById('joinRoomCodeInput');
-          const joinRoomSubmitBtn = document.getElementById('joinRoomSubmitBtn');
 
-          if (multiplayerModal) multiplayerModal.classList.remove('hidden');
-          if (tabJoinRoom) tabJoinRoom.click();
           if (joinRoomCodeInput) joinRoomCodeInput.value = cleanCode;
 
+          // Doğrudan bekleme odasını aç (kullanıcıyı sekme veya formla bekletmez!)
+          if (multiplayerModal) multiplayerModal.classList.remove('hidden');
+          if (roomTabsBar) roomTabsBar.classList.add('hidden');
+          if (createRoomContent) createRoomContent.classList.add('hidden');
+          if (joinRoomContent) joinRoomContent.classList.add('hidden');
+          if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
+
+          if (waitingRoomCodeVal) waitingRoomCodeVal.textContent = cleanCode;
+          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+          if (waitingOwnerNotice) waitingOwnerNotice.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+
+          if (clientLobbyList) {
+            clientLobbyList.innerHTML = `
+              <li class="lobby-item is-host">
+                <span class="lobby-player-icon">👑</span>
+                <span class="lobby-player-name">Oda Sahibi</span>
+                <span class="lobby-ready-badge leader">LİDER</span>
+              </li>
+              <li class="lobby-item">
+                <span class="lobby-player-icon">🟢</span>
+                <span class="lobby-player-name">${this.escapeHtml(myName)} (Sen)</span>
+                <span class="lobby-ready-badge">BAĞLANIYOR</span>
+              </li>
+            `;
+          }
+          if (clientLobbyCount) clientLobbyCount.textContent = '2';
+
           if (window.showInGameAlert) {
-            window.showInGameAlert(`${cleanCode} numaralı arkadaş odasına bağlanılıyor...`, 'info', '🎮 ODAYA KATIL');
+            window.showInGameAlert(`${cleanCode} numaralı odaya bağlanılıyor...`, 'info', '🎮 ODAYA KATIL');
           }
-          if (joinRoomSubmitBtn) {
-            setTimeout(() => joinRoomSubmitBtn.click(), 400);
+
+          if (this.network.isHost) {
+            this.network.disconnect();
           }
+
+          this.network.joinRoom(cleanCode).then(() => {
+            if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+            sounds.playSpecial();
+          }).catch((err) => {
+            if (waitingStatusText) waitingStatusText.textContent = '⚠️ Odaya bağlanılamadı! Oda sahibi odayı henüz kurmamış olabilir.';
+            if (waitingOwnerNotice) waitingOwnerNotice.textContent = '⚠️ Oda bağlantısı kurulamadı. Kodun doğruluğundan emin olun.';
+          });
         };
-        setTimeout(() => tryAutoJoin(0), 400);
+        setTimeout(() => tryAutoJoin(0), 300);
       }
     } catch (e) {
       console.warn('URL room invite check failed:', e);

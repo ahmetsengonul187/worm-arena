@@ -574,7 +574,7 @@ class NetworkManager {
     // Her karede 50 segment yerine ana omurgayı (18-22 segment) aktararak bant genişliğini %70 düşürür
     const payload = {
       type: 'GAME_TICK',
-      worms: worms.map(w => {
+      worms: worms.map((w, idx) => {
         const step = Math.max(1, Math.ceil(w.body.length / 22));
         const downsampledBody = [];
         for (let b = 0; b < w.body.length; b += step) {
@@ -585,8 +585,11 @@ class NetworkManager {
           downsampledBody.push({ x: Math.round(tail.x), y: Math.round(tail.y) });
         }
 
+        const fallbackPeerId = (w === this.game.player) ? 'host' : (w.isBot ? ('bot_' + idx) : ('player_' + idx));
+        const wormPeerId = w.peerId || fallbackPeerId;
+
         return {
-          peerId: w.peerId || 'host',
+          peerId: wormPeerId,
           name: w.name,
           skinId: w.skin ? w.skin.id : 'white_king',
           hatId: w.hat || 'none',
