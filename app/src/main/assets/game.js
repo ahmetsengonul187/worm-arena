@@ -2065,6 +2065,10 @@ class WormArenaGame {
         rw.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
       }
 
+      // İstemci tarafında da anlık kafa-gövde çarpışmalarını kontrol et (sıfır gecikmeli ezilme)
+      this.checkWormCollisions(allWorms);
+      if (this.state !== 'PLAYING') return;
+
       this.camera.x += (this.player.x - window.innerWidth / 2 - this.camera.x) * 0.15;
       this.camera.y += (this.player.y - window.innerHeight / 2 - this.camera.y) * 0.15;
 
@@ -2234,9 +2238,76 @@ class WormArenaGame {
 
       for (let j = 0; j < allWorms.length; j++) {
         const victim = allWorms[j];
-        if (attacker === victim || victim.isDead) continue;
+        if (attacker === victim || victim.isDead || victim.ghostTimer > 0) continue;
 
-        // 1. Kafa Kafaya Çarpışma
+        // 1. Kafa-Gövde Çarpışması: Bir solucanın kafası diğer solucanın herhangi bir yerine (boyun, gövde, kuyruk) temas ettiğinde anında ezilir!
+        const vPoints = [{ x: victim.x, y: victim.y }, ...victim.body];
+        let bodyCollided = false;
+
+        // Boyundan kuyruğa kadar tüm gövde hattını kesintisiz kapsül (swept segment) olarak kontrol et
+        for (let k = 1; k < vPoints.length; k++) {
+          const p1 = vPoints[k - 1];
+          const p2 = vPoints[k];
+
+          // Kuyruğa doğru zarif incelmeyi hesaba katarak çarpışma yarıçapını belirle
+          const progress = k / vPoints.length;
+          const segRadius = progress > 0.6 ? Math.max(10, victim.radius * 0.85) : Math.max(12, victim.radius * 0.95);
+          const hitThreshold = attacker.radius * 0.95 + segRadius;
+          const hitThresholdSq = hitThreshold * hitThreshold;
+
+          // Hızlı AABB (Bounding Box) Elemesi - 60 FPS Optimizasyonu
+          const minX = (p1.x < p2.x ? p1.x : p2.x) - hitThreshold;
+          const maxX = (p1.x > p2.x ? p1.x : p2.x) + hitThreshold;
+          if (attacker.x < minX || attacker.x > maxX) continue;
+
+          const minY = (p1.y < p2.y ? p1.y : p2.y) - hitThreshold;
+          const maxY = (p1.y > p2.y ? p1.y : p2.y) + hitThreshold;
+          if (attacker.y < minY || attacker.y > maxY) continue;
+
+          // Noktanın doğru parçasına en yakın mesafesi (Continuous Capsule Collision)
+          const segDx = p2.x - p1.x;
+          const segDy = p2.y - p1.y;
+          const segLenSq = segDx * segDx + segDy * segDy;
+
+          let t = 0;
+          if (segLenSq > 0) {
+            t = ((attacker.x - p1.x) * segDx + (attacker.y - p1.y) * segDy) / segLenSq;
+            if (t < 0) t = 0;
+            else if (t > 1) t = 1;
+          }
+
+          const closeX = p1.x + t * segDx;
+          const closeY = p1.y + t * segDy;
+          const cdx = attacker.x - closeX;
+          const cdy = attacker.y - closeY;
+
+          if (cdx * cdx + cdy * cdy <= hitThresholdSq) {
+            // BAŞ DİĞER YILANIN GÖVDESİNE / HERHANGİ BİR YERİNE DEĞDİ -> ANINDA EZİLİR!
+            bodyCollided = true;
+            attacker.isDead = true;
+            attacker.killedBy = victim.name;
+            victim.kills++;
+            victim.score += 60;
+
+            if (victim === this.player) {
+              sounds.playSpecial();
+              this.vibrate([40, 20, 60]);
+              this.checkQuestProgress('kill_worms');
+            }
+
+            if (attacker === this.player) {
+              this.handlePlayerDeath(victim.name);
+              return;
+            } else {
+              this.dropFoodFromWorm(attacker);
+            }
+            break;
+          }
+        }
+
+        if (bodyCollided) break;
+
+        // 2. Kafa Kafaya Çarpışma (İki yılanın başı doğrudan burun buruna çarpışırsa)
         const headThresh = (attacker.radius + victim.radius) * 0.95;
         const hdx = attacker.x - victim.x;
         const hdy = attacker.y - victim.y;
@@ -2262,42 +2333,6 @@ class WormArenaGame {
           }
           break;
         }
-
-        // 2. Kafa-Gövde Çarpışması
-        const hitThreshold = attacker.radius + victim.radius * 0.85;
-        const hitThresholdSq = hitThreshold * hitThreshold;
-        let collided = false;
-
-        for (let k = 1; k < victim.body.length; k++) {
-          const seg = victim.body[k];
-          const bdx = attacker.x - seg.x;
-          if (bdx > hitThreshold || bdx < -hitThreshold) continue;
-          const bdy = attacker.y - seg.y;
-          if (bdy > hitThreshold || bdy < -hitThreshold) continue;
-
-          if (bdx * bdx + bdy * bdy < hitThresholdSq) {
-            collided = true;
-            attacker.isDead = true;
-            attacker.killedBy = victim.name;
-            victim.kills++;
-            victim.score += 60;
-
-            if (victim === this.player) {
-              sounds.playSpecial();
-              this.vibrate([40, 20, 60]);
-              this.checkQuestProgress('kill_worms');
-            }
-
-            if (attacker === this.player) {
-              this.handlePlayerDeath(victim.name);
-              return;
-            } else {
-              this.dropFoodFromWorm(attacker);
-            }
-            break;
-          }
-        }
-        if (collided) break;
       }
     }
   }

@@ -537,6 +537,9 @@ class NetworkManager {
           } else {
             worm.x += rdx * 0.35;
             worm.y += rdy * 0.35;
+            if (wData.body && wData.body.length > 0 && (Math.abs(worm.body.length - wData.body.length) > 2 || !worm.body.length)) {
+              worm.body = wData.body;
+            }
           }
           worm.radius = wData.radius;
           worm.score = wData.score;
