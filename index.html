@@ -16,7 +16,7 @@
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&family=Fredoka+One&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700;900&family=Outfit:wght@500;700;900&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="style.css">
   <!-- WebRTC Çok Oyunculu Kütüphanesi (Yerel Dosya + Güvenli CDN Yedeği) -->
@@ -317,10 +317,10 @@
         <!-- 2. ODAYA KATILMA BÖLÜMÜ -->
         <div id="joinRoomTabContent" class="room-tab-content hidden">
           <div class="join-input-group">
-            <label class="join-label" for="joinPlayerNameInput">👤 Oyundaki Adın:</label>
+            <label class="join-label" for="joinPlayerNameInput">👤 Oyuncu Adın:</label>
             <input type="text" id="joinPlayerNameInput" maxlength="14" placeholder="Adını yaz (Örn: Kaplan_TR)" class="join-code-input" style="font-size: 1.15rem; letter-spacing: 1px; font-weight: 700; color: #00ffcc; text-transform: none; margin-bottom: 14px; text-align: left; padding: 12px 16px;">
 
-            <label class="join-label" for="joinRoomCodeInput">🔢 Arkadaşının Verdiği 4 Haneli Oda Kodunu Gir:</label>
+            <label class="join-label" for="joinRoomCodeInput">🔢 4 Haneli Oda Kodunu Gir:</label>
             <input type="text" id="joinRoomCodeInput" maxlength="6" placeholder="Örn: 7842" class="join-code-input">
             <p class="join-status-msg" id="joinStatusMsg"></p>
           </div>
@@ -328,7 +328,7 @@
           <button class="play-btn-large glow-pulse" id="joinRoomSubmitBtn">
             <span>ODAYA BAĞLAN & LOBİYE GİR 🎮</span>
           </button>
-          <p class="code-tip" style="margin-top: 10px; text-align: center;">⏳ Odaya bağlandığında bekleme odasında arkadaşların listelenecek ve oda sahibi arenayı başlattığında oyun başlayacaktır.</p>
+          <p class="code-tip" style="margin-top: 10px; text-align: center;">⏳ Odaya bağlandığında bekleme odasında arkadaşların listelenecek ve oda sahibi arenayı başlattığında oyun otomatik olarak başlayacaktır.</p>
         </div>
 
         <!-- 3. KATILAN ARKADAŞ İÇİN BEKLEME ODASI (CLIENT LOBİSİ) -->
@@ -342,7 +342,7 @@
             </div>
             <div class="waiting-pulse-banner">
               <span class="waiting-pulse-dot"></span>
-              <span id="waitingStatusText">Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız</span>
+              <span id="waitingStatusText">Oda sahibi henüz oyunu başlatmadı. Lütfen bekleyin...</span>
             </div>
           </div>
 
@@ -362,7 +362,7 @@
 
           <div class="waiting-loading-banner">
             <div class="waiting-spinner-small"></div>
-            <span class="waiting-loading-msg" id="waitingOwnerNotice">Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız</span>
+            <span class="waiting-loading-msg" id="waitingOwnerNotice">Oda sahibi henüz oyunu başlatmadı. Lütfen bekleyin...</span>
           </div>
 
           <div class="waiting-notice-box">

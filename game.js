@@ -889,18 +889,24 @@ class Worm {
       this.updateAI(worldW, worldH, foods, allWorms);
     }
 
-    // Açıyı hedefe doğru yumuşak döndür
+    // Açıyı hedefe doğru yumuşak ve akıcı döndür (360° dönüşlerde durma/kilitlenme olmadan sürekli hareket)
     let diff = this.targetAngle - this.angle;
     while (diff < -Math.PI) diff += Math.PI * 2;
     while (diff > Math.PI) diff -= Math.PI * 2;
-    const currentTurnSpeed = this.isBoosting ? 0.17 : 0.14;
-    this.angle += diff * currentTurnSpeed;
+
+    // Slither.io / Wormate.io tarzı yumuşak maksimum dönüş hızı (Geniş ve akıcı yay)
+    const maxTurnSpeed = this.isBoosting ? 0.105 : 0.082;
+    if (Math.abs(diff) <= maxTurnSpeed) {
+      this.angle = this.targetAngle;
+    } else {
+      this.angle += Math.sign(diff) * maxTurnSpeed;
+    }
 
     // Açıyı [-PI, PI] aralığında normalize et (Açı taşması ve yön kilitlenmesini kesin önler)
     while (this.angle < -Math.PI) this.angle += Math.PI * 2;
     while (this.angle > Math.PI) this.angle -= Math.PI * 2;
 
-    // Başı İlerlet (Önceki koordinatı swept-circle yem yeme için kaydet)
+    // Başı İlerlet (Her karede kesintisiz ileri hareket)
     this.prevX = this.x;
     this.prevY = this.y;
     this.x += Math.cos(this.angle) * this.speed;
@@ -913,24 +919,24 @@ class Worm {
       return;
     }
 
-    // Gövde Hareketi (Inverse Kinematics - Saf Vektör Matematiği, 0 Trigonometri, Süper Akıcı 60 FPS)
+    // Gövde Hareketi (Her segment öndekini kesintisiz takip eder, 360 dönüşlerde gövde ASLA donmaz ve durmaz)
     if (this.body.length > 0) {
       let prevX = this.x;
       let prevY = this.y;
       const sp = this.spacing;
-      const spSq = sp * sp;
 
       for (let i = 0; i < this.body.length; i++) {
         const seg = this.body[i];
         const dx = prevX - seg.x;
         const dy = prevY - seg.y;
-        const distSq = dx * dx + dy * dy;
+        const dist = Math.hypot(dx, dy);
 
-        if (distSq > spSq) {
-          const dist = Math.sqrt(distSq);
-          const ratio = sp / dist;
-          seg.x = prevX - dx * ratio;
-          seg.y = prevY - dy * ratio;
+        if (dist > 0.001) {
+          seg.x = prevX - (dx / dist) * sp;
+          seg.y = prevY - (dy / dist) * sp;
+        } else {
+          seg.x = prevX - Math.cos(this.angle) * sp;
+          seg.y = prevY - Math.sin(this.angle) * sp;
         }
         prevX = seg.x;
         prevY = seg.y;
@@ -3108,7 +3114,7 @@ class WormArenaGame {
     } else {
       if (spinBtn && !this.isSpinningWheel) {
         spinBtn.disabled = false;
-        spinBtn.innerHTML = '<span>ÇARKIFİŞEK ÇEVİR 🎯</span>';
+        spinBtn.innerHTML = '<span>ŞANS ÇARKINI ÇEVİR 🎯</span>';
         spinBtn.style.opacity = '1';
         spinBtn.style.cursor = 'pointer';
       }
@@ -4032,11 +4038,11 @@ class WormArenaGame {
           waitingRoomCodeVal.textContent = roomCode || this.network.roomCode;
         }
         if (waitingStatusText) {
-          waitingStatusText.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+          waitingStatusText.textContent = 'Oda sahibi henüz oyunu başlatmadı. Lütfen bekleyin...';
         }
         const waitingOwnerNotice = document.getElementById('waitingOwnerNotice');
         if (waitingOwnerNotice) {
-          waitingOwnerNotice.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+          waitingOwnerNotice.textContent = 'Oda sahibi henüz oyunu başlatmadı. Lütfen bekleyin...';
         }
       }
     };
@@ -4047,7 +4053,7 @@ class WormArenaGame {
     };
 
     const clientRetryJoinBtn = document.getElementById('clientRetryJoinBtn');
-    const WAITING_MSG = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+    const WAITING_MSG = 'Oda sahibi henüz oyunu başlatmadı. Lütfen bekleyin...';
 
     // Bağlanma denemesi sırasında durum yazısını canlı güncelle (1/3, 2/3, 3/3)
     this.network.onJoinStatus = (msg) => {
@@ -4359,7 +4365,7 @@ class WormArenaGame {
 
       const dx = clientX - playerScreenX;
       const dy = clientY - playerScreenY;
-      if (dx * dx + dy * dy > 64) { // > 8px
+      if (dx * dx + dy * dy > 576) { // > 24px fare mesafesi (kafa üstündeyken yön titremesini önler)
         this.player.targetAngle = Math.atan2(dy, dx);
       }
     };
