@@ -4311,9 +4311,9 @@ class WormArenaGame {
 
         if (startRoomGameBtnText) {
           if (players.length > 1) {
-            startRoomGameBtnText.textContent = `ARENAYI BAŞLAT (${players.length} Oyuncuyla Başla) 🚀`;
+            startRoomGameBtnText.textContent = `OYUNU BAŞLAT (${players.length} Oyuncuyla Başla) 🚀`;
           } else {
-            startRoomGameBtnText.textContent = 'ARENAYI BAŞLAT 🚀';
+            startRoomGameBtnText.textContent = 'OYUNU BAŞLAT 🚀';
           }
         }
         if (lobbyStatusBadge) {
