@@ -819,14 +819,14 @@ class Worm {
     this.targetAngle = this.angle;
     this.turnSpeed = 0.14; // Kıvrak ve rahat manevra kabiliyeti
 
-    // Hız Dengesi & Turbo (Dengeli, akıcı, kontrolü kolay ve adil hız)
-    this.baseSpeed = 3.3; // İdeal kıvrak ve akıcı normal hız (eskiden 5.2 çok hızlıydı)
-    this.boostSpeed = 6.6; // Yüksek adrenalinli ama kontrol edilebilir 2 kat turbo hızı (eskiden 10.2 çok hızlıydı)
+    // Hız Dengesi & Turbo (Daha sakin, rahat kontrol edilebilir ve hassas manevra hızı)
+    this.baseSpeed = 2.4; // Sakin ve kontrollü normal hız (3.3'ten düşürüldü)
+    this.boostSpeed = 4.8; // Dengeli 2 kat turbo hızı (6.6'dan düşürüldü)
     this.speed = this.baseSpeed;
     this.isBoosting = false;
 
     this.radius = 11;
-    this.spacing = 7.5;
+    this.spacing = 6.8;
     this.score = 15;
     this.kills = 0;
     this.isDead = false;
