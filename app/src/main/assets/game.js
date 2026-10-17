@@ -17,15 +17,15 @@ const SKINS = [
   { id: 'frozen_frost', name: 'Buzul Kırağı Ejderi', unlockLevel: 24, shape: 'frost', head: '#38bdf8', body1: '#0284c7', body2: '#bae6fd', glow: '#00f0ff', outline: '#082f49', spine: '#e0f2fe', belly: '#f0f9ff', cost: 1000 }
 ];
 
-// 🎁 7 Günlük Aşama & Dev Ödül Yolculuğu (Rozetler yerine somut altın, elmas, iksir ve kostümler)
+// 🎁 7 Günlük Aşama & Mantıklı Ödül Yolculuğu (Elmaslar tamamen kaldırıldı; somut Altın, XP ve Özel Başlıklar verilir)
 const SEVEN_DAY_REWARDS = [
-  { day: 1, target: 15, goalText: '15 Skor Yap', rewardIcon: '🪙', rewardText: '+150 Altın', rewardCoins: 150, rewardDiamonds: 5, rewardItem: null },
-  { day: 2, target: 30, goalText: '30 Skor Yap', rewardIcon: '🧲', rewardText: 'Mıknatıs + 250🪙', rewardCoins: 250, rewardDiamonds: 10, rewardItem: null },
-  { day: 3, target: 60, goalText: '60 Skor Yap', rewardIcon: '🕶️', rewardText: 'Havalı Gözlük + 350🪙', rewardCoins: 350, rewardDiamonds: 15, rewardItem: 'sunglasses' },
-  { day: 4, target: 120, goalText: '120 Skor Yap', rewardIcon: '💎', rewardText: '25 Elmas + 500🪙', rewardCoins: 500, rewardDiamonds: 25, rewardItem: null },
-  { day: 5, target: 240, goalText: '240 Skor Yap', rewardIcon: '🎁', rewardText: 'Gizemli Sandık + 750🪙', rewardCoins: 750, rewardDiamonds: 35, rewardItem: null },
-  { day: 6, target: 480, goalText: '480 Skor Yap', rewardIcon: '💎', rewardText: '50 Elmas + 1000🪙', rewardCoins: 1000, rewardDiamonds: 50, rewardItem: null },
-  { day: 7, target: 1000, goalText: '1000 Skor Efsanesi', rewardIcon: '👑', rewardText: 'Altın Taç + 2500🪙', rewardCoins: 2500, rewardDiamonds: 100, rewardItem: 'crown' }
+  { day: 1, target: 25, goalText: '25 Skora Ulaş', rewardIcon: '🪙', rewardText: '+200 Altın', rewardCoins: 200, rewardXp: 30, rewardItem: null },
+  { day: 2, target: 50, goalText: '50 Skora Ulaş', rewardIcon: '🕶️', rewardText: 'Havalı Yıldız Başı + 350🪙', rewardCoins: 350, rewardXp: 50, rewardItem: 'sunglasses' },
+  { day: 3, target: 100, goalText: '100 Skora Ulaş', rewardIcon: '🪙', rewardText: '+500 Altın & 80 XP', rewardCoins: 500, rewardXp: 80, rewardItem: null },
+  { day: 4, target: 180, goalText: '180 Skora Ulaş', rewardIcon: '🤠', rewardText: 'Vahşi Kovboy Başı + 750🪙', rewardCoins: 750, rewardXp: 100, rewardItem: 'cowboy' },
+  { day: 5, target: 300, goalText: '300 Skora Ulaş', rewardIcon: '🪙', rewardText: '+1000 Altın & 150 XP', rewardCoins: 1000, rewardXp: 150, rewardItem: null },
+  { day: 6, target: 450, goalText: '450 Skora Ulaş', rewardIcon: '🥷', rewardText: 'Kara Ninja Başı + 1500🪙', rewardCoins: 1500, rewardXp: 200, rewardItem: 'ninja' },
+  { day: 7, target: 750, goalText: '750 Efsane Skor', rewardIcon: '👑', rewardText: 'Altın Taçlı Kral Başı + 2500🪙', rewardCoins: 2500, rewardXp: 300, rewardItem: 'crown' }
 ];
 const SEVEN_DAY_MILESTONES = SEVEN_DAY_REWARDS;
 
@@ -1554,7 +1554,6 @@ class WormArenaGame {
     this.eventTimer = 0;
     this.eventDuration = 0;
 
-    this.diamonds = parseInt(safeGetStorage('worm_diamonds', '25'), 10) || 25;
     this.selectedSkinIndex = 0;
     this.state = 'START';
     this.bestRank = 99;
@@ -2482,11 +2481,17 @@ class WormArenaGame {
 
           if (worm === this.player) {
             sounds.playEat();
+            this.checkQuestProgress('eat_foods', 1);
             if (food.points > 10 || food.type === 'star_coin') {
               sounds.playCoin();
               this.vibrate(20);
-              this.checkQuestProgress('collect_gold');
+              this.checkQuestProgress('collect_gold', 1);
             }
+            if (food.type === 'magnet' || food.type === 'ghost' || food.type === 'double') {
+              this.checkQuestProgress('collect_powerup', 1);
+            }
+            this.checkQuestProgress('reach_score', Math.floor(this.player.score));
+            this.checkMilestoneProgress(Math.floor(this.player.score));
           }
 
           this.createFoodBurst(food.x, food.y, food.color);
@@ -2883,15 +2888,13 @@ class WormArenaGame {
   }
 
   addDiamonds(amount) {
-    this.diamonds = (this.diamonds || 0) + amount;
-    localStorage.setItem('worm_diamonds', this.diamonds.toString());
-    this.updateEconomyUI();
-    sounds.playCoin();
+    // Elmaslar kaldırıldı, sistem altın ve XP ile çalışır
   }
 
   // ==================== TURBO HIZLANMA & DAİRESEL SAYAÇ SİSTEMİ ====================
   startTurboBoost() {
     if (!this.player || this.player.isDead || this.boostState !== 'READY') return;
+    this.checkQuestProgress('use_turbo', 1);
     this.boostState = 'BOOSTING';
     this.boostTimer = 0;
     this.player.isBoosting = true;
@@ -2967,13 +2970,11 @@ class WormArenaGame {
     const { level, current, required, pct } = this.getXpProgressInCurrentLevel(this.xp);
 
     const coinCountEl = document.getElementById('menuCoinCount');
-    const diamondCountEl = document.getElementById('menuDiamondCount');
     const levelTextEl = document.getElementById('menuLevelText');
     const xpFillEl = document.getElementById('menuXpFill');
     const shopCoinCountEl = document.getElementById('shopCoinCount');
 
     if (coinCountEl) coinCountEl.textContent = this.coins;
-    if (diamondCountEl) diamondCountEl.textContent = this.diamonds || 0;
     if (shopCoinCountEl) shopCoinCountEl.textContent = this.coins;
     if (levelTextEl) levelTextEl.textContent = level;
     if (xpFillEl) {
@@ -3342,35 +3343,44 @@ class WormArenaGame {
     });
   }
 
-  // ==================== GÖREVLER & 7 GÜNLÜK HEDEF VE ROZET SİSTEMİ ====================
+  // ==================== GÖREVLER & 7 GÜNLÜK HEDEF VE ÖDÜL SİSTEMİ ====================
   initQuestsSystem() {
+    const defaultQuests = [
+      { id: 'eat_foods', title: '40 Adet Yiyecek Ye 🍎', target: 40, current: 0, reward: 120, claimed: false },
+      { id: 'kill_worms', title: '2 Solucanı Tuzağa Düşürüp Ez 💀', target: 2, current: 0, reward: 200, claimed: false },
+      { id: 'reach_score', title: '200 Skora Ulaş ve Büyü ⭐', target: 200, current: 0, reward: 180, claimed: false },
+      { id: 'use_turbo', title: '5 Kez Turbo / Hızlanma Kullan ⚡', target: 5, current: 0, reward: 100, claimed: false },
+      { id: 'collect_gold', title: '8 Altın Yıldız / Değerli Yem Topla ⭐', target: 8, current: 0, reward: 150, claimed: false },
+      { id: 'collect_powerup', title: '2 Güçlendirme (Mıknatıs/Hayalet/2X) Al 🧲', target: 2, current: 0, reward: 160, claimed: false }
+    ];
+
     try {
-      this.quests = JSON.parse(safeGetStorage('worm_quests', 'null')) || [
-        { id: 'kill_worms', title: '3 Solucan Yok Et 💀', target: 3, current: 0, reward: 150, claimed: false },
-        { id: 'reach_score', title: '1000 Skora Ulaş ⭐', target: 1000, current: 0, reward: 200, claimed: false },
-        { id: 'collect_gold', title: '15 Altın / Değerli Meyve Topla 🪙', target: 15, current: 0, reward: 120, claimed: false }
-      ];
+      const stored = JSON.parse(safeGetStorage('worm_quests', 'null'));
+      if (Array.isArray(stored) && stored.length >= defaultQuests.length) {
+        this.quests = stored;
+      } else {
+        // Eksik veya eski görevler varsa mantıklı yeni liste ile senkronize et
+        this.quests = defaultQuests.map(def => {
+          const old = Array.isArray(stored) ? stored.find(s => s.id === def.id) : null;
+          return old ? { ...def, current: old.current || 0, claimed: !!old.claimed } : def;
+        });
+        localStorage.setItem('worm_quests', JSON.stringify(this.quests));
+      }
     } catch (e) {
-      this.quests = [
-        { id: 'kill_worms', title: '3 Solucan Yok Et 💀', target: 3, current: 0, reward: 150, claimed: false },
-        { id: 'reach_score', title: '1000 Skora Ulaş ⭐', target: 1000, current: 0, reward: 200, claimed: false },
-        { id: 'collect_gold', title: '15 Altın / Değerli Meyve Topla 🪙', target: 15, current: 0, reward: 120, claimed: false }
-      ];
+      this.quests = defaultQuests;
     }
 
     try {
       this.milestoneData = JSON.parse(safeGetStorage('worm_milestone_data', 'null')) || {
         currentDay: 1,
         currentScore: 0,
-        claimedDays: [],
-        unlockedBadges: ['🥉']
+        claimedDays: []
       };
     } catch (e) {
       this.milestoneData = {
         currentDay: 1,
         currentScore: 0,
-        claimedDays: [],
-        unlockedBadges: ['🥉']
+        claimedDays: []
       };
     }
   }
@@ -3394,6 +3404,7 @@ class WormArenaGame {
   }
 
   checkQuestProgress(questId, value = 1) {
+    if (!this.quests) return;
     const q = this.quests.find(item => item.id === questId);
     if (q && !q.claimed) {
       if (questId === 'reach_score') {
@@ -3406,8 +3417,7 @@ class WormArenaGame {
   }
 
   updateActiveBadgeUI() {
-    const diamondCountEl = document.getElementById('menuDiamondCount');
-    if (diamondCountEl) diamondCountEl.textContent = this.diamonds || 0;
+    this.updateEconomyUI();
   }
 
   renderQuestsUI() {
@@ -3419,7 +3429,7 @@ class WormArenaGame {
 
     if (!this.milestoneData) this.initQuestsSystem();
 
-    // 🎁 7 Günlük Hedef & Dev Ödüller Yolculuğu (Rozetler kaldırıldı, gerçek ödüller)
+    // 🎁 7 Günlük Hedef & Mantıklı Ödüller Yolculuğu
     if (streakDaysRow) {
       SEVEN_DAY_REWARDS.forEach(ms => {
         const isClaimed = this.milestoneData.claimedDays.includes(ms.day);
@@ -3452,7 +3462,7 @@ class WormArenaGame {
             localStorage.setItem('worm_milestone_data', JSON.stringify(this.milestoneData));
 
             if (ms.rewardCoins) this.addCoins(ms.rewardCoins);
-            if (ms.rewardDiamonds) this.addDiamonds(ms.rewardDiamonds);
+            if (ms.rewardXp) this.addXp(ms.rewardXp);
             if (ms.rewardItem && !this.unlockedHats.includes(ms.rewardItem)) {
               this.unlockedHats.push(ms.rewardItem);
               localStorage.setItem('worm_unlocked_hats', JSON.stringify(this.unlockedHats));
@@ -3468,7 +3478,7 @@ class WormArenaGame {
       });
     }
 
-    // 3. Günlük Ekstra Görevler
+    // 🎯 Mantıklı Günlük Arena Görevleri
     if (questsList) {
       this.quests.forEach(q => {
         const pct = Math.min(100, Math.floor((q.current / q.target) * 100));
@@ -3479,7 +3489,7 @@ class WormArenaGame {
         item.innerHTML = `
           <div class="quest-info">
             <span class="quest-title">${q.title}</span>
-            <span class="quest-reward">+${q.reward} 🪙</span>
+            <span class="quest-reward">+${q.reward} 🪙 Altın</span>
             <div class="quest-progress-bar"><div class="quest-progress-fill" style="width:${pct}%"></div></div>
           </div>
           <button class="quest-claim-btn ${isDone && !q.claimed ? '' : 'disabled'}">
@@ -3494,7 +3504,9 @@ class WormArenaGame {
             this.addCoins(q.reward);
             localStorage.setItem('worm_quests', JSON.stringify(this.quests));
             sounds.playWheelWin();
+            window.showInGameAlert(`🎉 Görev Tamamlandı! +${q.reward} Altın Kazandın!`, 'success', '🪙 GÖREV ÖDÜLÜ');
             this.renderQuestsUI();
+            this.updateEconomyUI();
           });
         }
         questsList.appendChild(item);
