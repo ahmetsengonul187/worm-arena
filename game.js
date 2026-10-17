@@ -1624,7 +1624,9 @@ class WormArenaGame {
         controlMode: 'dynamic',
         boostPosition: 'right',
         minimap: true,
-        graphics: 'high'
+        graphics: 'high',
+        cameraZoom: 'normal',
+        highFps: true
       };
     } catch (e) {
       this.settings = {
@@ -1634,12 +1636,11 @@ class WormArenaGame {
         controlMode: 'dynamic',
         boostPosition: 'right',
         minimap: true,
-        graphics: 'high'
+        graphics: 'high',
+        cameraZoom: 'normal',
+        highFps: true
       };
     }
-      cameraZoom: 'normal',
-      highFps: true
-    };
 
     // Ses motoru durumunu uygula
     sounds.setSfxEnabled(this.settings.sfx !== false);

@@ -52,6 +52,8 @@ public class MainActivity extends AppCompatActivity {
             webView.setLayerType(View.LAYER_TYPE_NONE, null);
             webView.setBackgroundColor(0xFF070913);
 
+            WebView.setWebContentsDebuggingEnabled(true);
+
             webView.setWebViewClient(new WebViewClient() {
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -75,7 +77,8 @@ public class MainActivity extends AppCompatActivity {
                 private WebResourceResponse handleAssetIntercept(Uri uri) {
                     if (uri == null) return null;
                     String urlStr = uri.toString();
-                    if (urlStr.startsWith("file:///android_asset/")) {
+                    // Yalnızca sorgu (?) veya çapa (#) içeren file:///android_asset/ isteklerini yakala ve temizle
+                    if (urlStr.startsWith("file:///android_asset/") && (urlStr.indexOf('?') != -1 || urlStr.indexOf('#') != -1)) {
                         String assetPath = urlStr.substring("file:///android_asset/".length());
                         int queryIdx = assetPath.indexOf('?');
                         if (queryIdx != -1) {
@@ -87,14 +90,15 @@ public class MainActivity extends AppCompatActivity {
                         }
                         try {
                             String mimeType = "text/plain";
+                            String encoding = "UTF-8";
                             if (assetPath.endsWith(".html")) mimeType = "text/html";
                             else if (assetPath.endsWith(".js")) mimeType = "application/javascript";
                             else if (assetPath.endsWith(".css")) mimeType = "text/css";
-                            else if (assetPath.endsWith(".png")) mimeType = "image/png";
-                            else if (assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg")) mimeType = "image/jpeg";
+                            else if (assetPath.endsWith(".png")) { mimeType = "image/png"; encoding = null; }
+                            else if (assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg")) { mimeType = "image/jpeg"; encoding = null; }
                             else if (assetPath.endsWith(".json")) mimeType = "application/json";
                             java.io.InputStream is = getAssets().open(assetPath);
-                            return new WebResourceResponse(mimeType, "UTF-8", is);
+                            return new WebResourceResponse(mimeType, encoding, is);
                         } catch (Exception ignored) {}
                     }
                     return null;
@@ -133,6 +137,12 @@ public class MainActivity extends AppCompatActivity {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         request.grant(request.getResources());
                     }
+                }
+
+                @Override
+                public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
+                    android.util.Log.d("WormArenaJS", consoleMessage.message() + " [" + consoleMessage.sourceId() + ":" + consoleMessage.lineNumber() + "]");
+                    return true;
                 }
             });
 

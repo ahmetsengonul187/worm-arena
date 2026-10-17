@@ -425,7 +425,6 @@ class NetworkManager {
     const count = list.length;
     const centerX = this.game.worldWidth / 2;
     const centerY = this.game.worldHeight / 2;
-    const spawnRadius = Math.min(500, 200 + count * 45);
 
     // Host dünyasında tohum tabanlı yiyecekleri tazele (Ağdan 80KB veri aktarmak yerine tohum kodu kullanılır)
     const foodSeed = Number(this.roomCode) || Math.floor(Math.random() * 90000) + 10000;
