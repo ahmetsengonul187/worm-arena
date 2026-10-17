@@ -1,4 +1,5 @@
 <resources>
-    <color name="bg_dark">#070913</color>
+    <color name="bg_splash">#170D2C</color>
+    <color name="bg_dark">#170D2C</color>
     <color name="neon_cyan">#00F0FF</color>
 </resources>

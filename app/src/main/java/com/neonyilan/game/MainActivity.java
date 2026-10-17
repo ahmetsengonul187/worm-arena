@@ -52,7 +52,7 @@ public class MainActivity extends AppCompatActivity {
 
             // Donanım hızlandırma ve arka plan (LAYER_TYPE_NONE: Chromium dahili GPU kompozitörünü tam performans kullanır)
             webView.setLayerType(View.LAYER_TYPE_NONE, null);
-            webView.setBackgroundColor(0xFF070913);
+            webView.setBackgroundColor(0xFF170D2C);
 
             WebView.setWebContentsDebuggingEnabled(true);
 
