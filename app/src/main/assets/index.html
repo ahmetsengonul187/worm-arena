@@ -31,6 +31,40 @@
   </script>
 </head>
 <body>
+  <!-- ==================== 🌈 SEVİMLİ VE RENKLİ AÇILIŞ / SPLASH EKRANI ==================== -->
+  <div class="splash-screen-overlay" id="splashScreen">
+    <div class="splash-particles" aria-hidden="true">
+      <span class="splash-bubble sp1">🍬</span>
+      <span class="splash-bubble sp2">⭐</span>
+      <span class="splash-bubble sp3">🍭</span>
+      <span class="splash-bubble sp4">✨</span>
+      <span class="splash-bubble sp5">🍩</span>
+      <span class="splash-bubble sp6">🍓</span>
+      <span class="splash-bubble sp7">🧁</span>
+      <span class="splash-bubble sp8">🌈</span>
+      <span class="splash-bubble sp9">🎈</span>
+      <span class="splash-bubble sp10">🌟</span>
+    </div>
+
+    <div class="splash-content">
+      <div class="splash-logo-container">
+        <div class="splash-rainbow-ring"></div>
+        <img src="icon.jpg" alt="Worm Arena Logo" class="splash-logo-img">
+        <div class="splash-logo-sparkle">✨</div>
+      </div>
+
+      <h1 class="splash-title">WORM ARENA</h1>
+      <p class="splash-subtitle">✨ Renkli Solucanlar Dünyası! 🍭</p>
+
+      <div class="splash-loader-wrap">
+        <div class="splash-loader-track">
+          <div class="splash-loader-bar" id="splashLoaderBar"></div>
+        </div>
+        <p class="splash-status-text" id="splashStatusText">🍬 Renkli şekerler toplanıyor...</p>
+      </div>
+    </div>
+  </div>
+
   <div class="game-container" id="gameContainer">
     <!-- Ana Oyun Çizim Canvası -->
     <canvas id="arenaCanvas"></canvas>
@@ -144,8 +178,19 @@
       </div>
     </div>
 
-    <!-- ==================== TAM EKRAN ANA MENÜ ==================== -->
+    <!-- ==================== TAM EKRAN RENKLİ ÇOCUK DOSTU ANA MENÜ ==================== -->
     <div class="fullscreen-menu-overlay" id="startScreen">
+      <!-- Arka Plan Uçuşan Renkli Şeker ve Yıldızlar -->
+      <div class="menu-decorations" aria-hidden="true">
+        <span class="menu-float-item mf1">🍭</span>
+        <span class="menu-float-item mf2">⭐</span>
+        <span class="menu-float-item mf3">🍬</span>
+        <span class="menu-float-item mf4">✨</span>
+        <span class="menu-float-item mf5">🍩</span>
+        <span class="menu-float-item mf6">🍓</span>
+        <span class="menu-float-item mf7">🌈</span>
+      </div>
+
       <div class="menu-content-wrapper">
         <!-- 1. ÜST BÖLÜM: Para, Rozet, Seviye & Ses -->
         <div class="menu-header-group">
@@ -164,9 +209,13 @@
           </div>
 
           <div class="menu-logo-banner">
-            <img src="icon.jpg" alt="Logo" class="menu-logo-img">
+            <div class="menu-logo-wrapper">
+              <div class="menu-logo-halo"></div>
+              <img src="icon.jpg" alt="Logo" class="menu-logo-img">
+              <span class="menu-logo-badge">👑 EFSANE</span>
+            </div>
             <h1 class="menu-title">WORM ARENA</h1>
-            <p class="menu-subtitle">Solucanlar Savaşına Katıl!</p>
+            <p class="menu-subtitle">🌈 Renkli Solucanlar Savaşı! 🍭</p>
           </div>
         </div>
 
@@ -210,7 +259,7 @@
           </div>
 
           <div class="input-group">
-            <input type="text" id="playerNameInput" maxlength="14" value="" placeholder="✍️ Oyuncu Adını Gir..." class="player-name-input" autocomplete="off">
+            <input type="text" id="playerNameInput" maxlength="14" value="" placeholder="✍️ Süper Yılan Adın..." class="player-name-input" autocomplete="off">
           </div>
         </div>
 
@@ -218,7 +267,7 @@
         <div class="menu-bottom-group">
           <div class="main-action-buttons">
             <button class="play-btn-large glow-pulse" id="startGameBtn">
-              <span>ARENAYA GİR ▶</span>
+              <span>🐍 ARENAYA GİR ▶</span>
             </button>
 
             <button class="room-btn-secondary" id="openFriendsRoomBtn">

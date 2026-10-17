@@ -1611,6 +1611,7 @@ class WormArenaGame {
     safeExec('drawSkinPreview', () => this.drawSkinPreview());
     safeExec('drawFortuneWheel', () => this.drawFortuneWheel(0));
     safeExec('checkUrlRoomInvite', () => this.checkUrlRoomInvite());
+    safeExec('initSplashScreen', () => this.initSplashScreen());
 
     // Kullanıcının ekrana ilk dokunuşunda ana menü fon müziğini başlat
     const startAudioOnFirstUserTouch = () => {
@@ -1625,6 +1626,57 @@ class WormArenaGame {
     window.addEventListener('touchstart', startAudioOnFirstUserTouch, { once: true, passive: true });
     window.addEventListener('pointerdown', startAudioOnFirstUserTouch, { once: true, passive: true });
     window.addEventListener('click', startAudioOnFirstUserTouch, { once: true });
+  }
+
+  // ==================== 🌈 ÇOCUK DOSTU AÇILIŞ (SPLASH) EKRANI ====================
+  initSplashScreen() {
+    const splash = document.getElementById('splashScreen');
+    const bar = document.getElementById('splashLoaderBar');
+    const statusText = document.getElementById('splashStatusText');
+    if (!splash) return;
+
+    const messages = [
+      '🍬 Renkli şekerler toplanıyor...',
+      '🐍 Sevimli solucanlar uyanıyor...',
+      '⭐ Harita pırıl pırıl parlatılıyor...',
+      '🎉 Arenaya girmeye hazır mısın?!'
+    ];
+
+    let progress = 0;
+    let msgIndex = 0;
+
+    const dismissSplash = () => {
+      clearInterval(interval);
+      if (!splash || splash.classList.contains('fade-out')) return;
+      splash.classList.add('fade-out');
+      setTimeout(() => {
+        splash.style.display = 'none';
+      }, 520);
+    };
+
+    const interval = setInterval(() => {
+      progress += 12;
+      if (progress > 100) progress = 100;
+      if (bar) bar.style.width = `${progress}%`;
+
+      const newMsgIndex = Math.min(Math.floor((progress / 100) * messages.length), messages.length - 1);
+      if (newMsgIndex !== msgIndex) {
+        msgIndex = newMsgIndex;
+        if (statusText) statusText.textContent = messages[msgIndex];
+      }
+
+      if (progress >= 100) {
+        clearInterval(interval);
+        setTimeout(() => {
+          dismissSplash();
+        }, 320);
+      }
+    }, 150);
+
+    // Dokunarak hızlı geçme seçeneği
+    splash.addEventListener('click', () => {
+      if (progress >= 35) dismissSplash();
+    }, { once: true });
   }
 
   loadSavedPlayerName() {
