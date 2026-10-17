@@ -4770,20 +4770,16 @@ class WormArenaGame {
 
   // Arkadaşlara gönderilecek doğrudan web katılım linki
   getInviteLink(code) {
-    const defaultPublicUrl = 'https://worm-arena.vercel.app';
+    const defaultPublicUrl = 'https://ahmetsengonul187.github.io/worm-arena';
 
-    // Eğer halihazırda canlı bir web sitesi veya Vercel/özel domain üzerindeyse o anki adresi kullan
+    // Eğer halihazırda canlı bir web sitesi veya GitHub Pages üzerindeyse o anki adresi kullan
     if (window.location.protocol === 'https:' || (window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.startsWith('10.') && !window.location.hostname.startsWith('192.168.'))) {
-      // Eğer kullanıcı adı içeren github.io adresindeyse, gizlilik için temiz vercel linkini döndür
-      if (window.location.hostname.includes('github.io')) {
-        return `${defaultPublicUrl}/?oda=${code}`;
-      }
       const cleanPath = window.location.pathname.replace(/\/index\.html$/, '');
       const basePath = cleanPath.endsWith('/') ? cleanPath : cleanPath + '/';
       return `${window.location.origin}${basePath}?oda=${code}`;
     }
 
-    // Android APK, yerel dosya veya emülatördeyse doğrudan Vercel linkini ver (Kullanıcı adı içermez)
+    // Android APK, yerel dosya veya emülatördeyse GitHub Pages linkini ver
     return `${defaultPublicUrl}/?oda=${code}`;
   }
 
