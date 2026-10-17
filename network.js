@@ -283,16 +283,8 @@ class NetworkManager {
       const worm = this.remotePlayers.get(peerId);
       if (worm && !worm.isDead) {
         if (typeof data.x === 'number' && typeof data.y === 'number') {
-          const dx = data.x - worm.x;
-          const dy = data.y - worm.y;
-          const distSq = dx * dx + dy * dy;
-          if (distSq > 360000) {
-            worm.x = data.x;
-            worm.y = data.y;
-          } else {
-            worm.x += dx * 0.45;
-            worm.y += dy * 0.45;
-          }
+          worm.x = data.x;
+          worm.y = data.y;
         }
         if (typeof data.angle === 'number') {
           worm.angle = data.angle;

@@ -4180,7 +4180,7 @@ class WormArenaGame {
 
     // Pointer Events (Hem Fare, Hem Stylus, Hem Dokunmatik Tarayıcı Desteği)
     window.addEventListener('pointermove', (e) => {
-      if (this.state === 'PLAYING' && (e.pointerType === 'mouse' || e.buttons > 0)) {
+      if (this.state === 'PLAYING') {
         updateSteering(e.clientX, e.clientY);
       }
     });
@@ -4194,6 +4194,29 @@ class WormArenaGame {
         updateSteering(e.clientX, e.clientY);
       }
     });
+
+    // Doğrudan Dokunmatik / Mobil Tarayıcı Kontrolleri (Tüm Ekranda Kesintisiz Yönlendirme)
+    window.addEventListener('touchmove', (e) => {
+      if (this.state === 'PLAYING' && e.touches.length > 0) {
+        const t = e.touches[0];
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop')) {
+          return;
+        }
+        updateSteering(t.clientX, t.clientY);
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchstart', (e) => {
+      if (this.state === 'PLAYING' && e.touches.length > 0) {
+        const t = e.touches[0];
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        if (el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop')) {
+          return;
+        }
+        updateSteering(t.clientX, t.clientY);
+      }
+    }, { passive: true });
 
     // Mobil Joystick (Tüm Ekran Destekli - Hem Sağ Hem Sol - Çoklu Dokunmatik)
     let joystickTouchId = null;
