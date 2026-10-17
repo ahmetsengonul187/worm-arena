@@ -2052,9 +2052,15 @@ html, body {
   color: #00f0ff;
 }
 
-.diamond-pill {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.18), rgba(112, 0, 255, 0.22));
-  border-color: rgba(0, 240, 255, 0.4);
+.streak-day-box.major-milestone {
+  border-color: rgba(255, 215, 0, 0.45);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.85), rgba(65, 38, 12, 0.75));
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.18);
+}
+.streak-day-box.major-milestone .day-badge-tag {
+  color: #ffd700;
+  font-weight: 900;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.5);
 }
 
 .quests-list-box {

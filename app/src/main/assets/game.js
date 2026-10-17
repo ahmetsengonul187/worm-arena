@@ -17,15 +17,23 @@ const SKINS = [
   { id: 'frozen_frost', name: 'Buzul Kırağı Ejderi', unlockLevel: 24, shape: 'frost', head: '#38bdf8', body1: '#0284c7', body2: '#bae6fd', glow: '#00f0ff', outline: '#082f49', spine: '#e0f2fe', belly: '#f0f9ff', cost: 1000 }
 ];
 
-// 🎁 7 Günlük Aşama & Mantıklı Ödül Yolculuğu (Elmaslar tamamen kaldırıldı; somut Altın, XP ve Özel Başlıklar verilir)
+// 🎁 Günlük Sadakat & Büyük Aşama Ödülleri (1..7, 15, 30, 60, 90, 120, 150, 180, 365. Günler)
 const SEVEN_DAY_REWARDS = [
-  { day: 1, target: 25, goalText: '25 Skora Ulaş', rewardIcon: '🪙', rewardText: '+200 Altın', rewardCoins: 200, rewardXp: 30, rewardItem: null },
-  { day: 2, target: 50, goalText: '50 Skora Ulaş', rewardIcon: '🕶️', rewardText: 'Havalı Yıldız Başı + 350🪙', rewardCoins: 350, rewardXp: 50, rewardItem: 'sunglasses' },
-  { day: 3, target: 100, goalText: '100 Skora Ulaş', rewardIcon: '🪙', rewardText: '+500 Altın & 80 XP', rewardCoins: 500, rewardXp: 80, rewardItem: null },
-  { day: 4, target: 180, goalText: '180 Skora Ulaş', rewardIcon: '🤠', rewardText: 'Vahşi Kovboy Başı + 750🪙', rewardCoins: 750, rewardXp: 100, rewardItem: 'cowboy' },
-  { day: 5, target: 300, goalText: '300 Skora Ulaş', rewardIcon: '🪙', rewardText: '+1000 Altın & 150 XP', rewardCoins: 1000, rewardXp: 150, rewardItem: null },
-  { day: 6, target: 450, goalText: '450 Skora Ulaş', rewardIcon: '🥷', rewardText: 'Kara Ninja Başı + 1500🪙', rewardCoins: 1500, rewardXp: 200, rewardItem: 'ninja' },
-  { day: 7, target: 750, goalText: '750 Efsane Skor', rewardIcon: '👑', rewardText: 'Altın Taçlı Kral Başı + 2500🪙', rewardCoins: 2500, rewardXp: 300, rewardItem: 'crown' }
+  { day: 1, tag: 'GÜN 1', target: 25, goalText: '25 Skora Ulaş', rewardIcon: '🪙', rewardText: '+200 Altın', rewardCoins: 200, rewardXp: 30, rewardItem: null },
+  { day: 2, tag: 'GÜN 2', target: 50, goalText: '50 Skora Ulaş', rewardIcon: '🕶️', rewardText: 'Havalı Yıldız Başı', rewardCoins: 350, rewardXp: 50, rewardItem: 'sunglasses' },
+  { day: 3, tag: 'GÜN 3', target: 100, goalText: '100 Skora Ulaş', rewardIcon: '🪙', rewardText: '+500 Altın & 80 XP', rewardCoins: 500, rewardXp: 80, rewardItem: null },
+  { day: 4, tag: 'GÜN 4', target: 180, goalText: '180 Skora Ulaş', rewardIcon: '🤠', rewardText: 'Vahşi Kovboy Başı', rewardCoins: 750, rewardXp: 100, rewardItem: 'cowboy' },
+  { day: 5, tag: 'GÜN 5', target: 300, goalText: '300 Skora Ulaş', rewardIcon: '🪙', rewardText: '+1000 Altın & 150 XP', rewardCoins: 1000, rewardXp: 150, rewardItem: null },
+  { day: 6, tag: 'GÜN 6', target: 450, goalText: '450 Skora Ulaş', rewardIcon: '🥷', rewardText: 'Kara Ninja Başı', rewardCoins: 1500, rewardXp: 200, rewardItem: 'ninja' },
+  { day: 7, tag: '1. HAFTA 👑', target: 600, goalText: '600 Skora Ulaş', rewardIcon: '👑', rewardText: 'Altın Taç Başı + 2500🪙', rewardCoins: 2500, rewardXp: 300, rewardItem: 'crown' },
+  { day: 15, tag: '15. GÜN ⭐', target: 800, goalText: '800 Usta Skor', rewardIcon: '😈', rewardText: 'Şeytan Lordu Başı + 3500🪙', rewardCoins: 3500, rewardXp: 500, rewardItem: 'horns' },
+  { day: 30, tag: '1. AY 🌟', target: 1000, goalText: '1000 Efsane Skor', rewardIcon: '🤖', rewardText: 'Sayborg Başı + Magma Kostümü + 5000🪙', rewardCoins: 5000, rewardXp: 1000, rewardItem: 'robot', rewardSkin: 'fire_tiger' },
+  { day: 60, tag: '2. AY ⭐', target: 1300, goalText: '1300 Kadim Skor', rewardIcon: '🧙', rewardText: 'Büyücü Başı + Gölge Kostümü + 7500🪙', rewardCoins: 7500, rewardXp: 1500, rewardItem: 'wizard', rewardSkin: 'shadow_ninja' },
+  { day: 90, tag: '3. AY 🏆', target: 1600, goalText: '1600 Şampiyon', rewardIcon: '💀', rewardText: 'Lanetli Kafa + Samuray + 10.000🪙', rewardCoins: 10000, rewardXp: 2000, rewardItem: 'skull', rewardSkin: 'samurai_warlord' },
+  { day: 120, tag: '4. AY 👑', target: 2000, goalText: '2000 Yüce Efendi', rewardIcon: '😇', rewardText: 'Kutsal Melek + Hiçlik Ejderi + 15.000🪙', rewardCoins: 15000, rewardXp: 3000, rewardItem: 'halo', rewardSkin: 'dark_galaxy' },
+  { day: 150, tag: '5. AY 🚀', target: 2400, goalText: '2400 Kozmik Titan', rewardIcon: '🐱', rewardText: 'Siber Kedi + 20.000🪙', rewardCoins: 20000, rewardXp: 4000, rewardItem: 'cat_ears' },
+  { day: 180, tag: '6. AY 👑', target: 3000, goalText: '3000 Zirve Efsanesi', rewardIcon: '🏴‍☠️', rewardText: 'Korsan Başı + Buzul Ejderi + 30.000🪙', rewardCoins: 30000, rewardXp: 5000, rewardItem: 'pirate', rewardSkin: 'frozen_frost' },
+  { day: 365, tag: '1 YIL 💥', target: 4000, goalText: '4000 Ölümsüz Skor', rewardIcon: '🔥', rewardText: '50.000🪙 Devasa Hazine & 10.000 XP', rewardCoins: 50000, rewardXp: 10000, rewardItem: null }
 ];
 const SEVEN_DAY_MILESTONES = SEVEN_DAY_REWARDS;
 
@@ -3383,6 +3391,26 @@ class WormArenaGame {
         claimedDays: []
       };
     }
+
+    // Günlük Giriş Takibi (Unique Login Days)
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const lastLogin = safeGetStorage('worm_last_login_date', '');
+    let totalLogins = parseInt(safeGetStorage('worm_total_login_days', '1'), 10) || 1;
+    if (lastLogin !== todayStr) {
+      if (lastLogin) {
+        totalLogins++;
+      }
+      localStorage.setItem('worm_last_login_date', todayStr);
+      localStorage.setItem('worm_total_login_days', totalLogins.toString());
+    }
+    this.totalLoginDays = totalLogins;
+
+    // Eğer daha önce 7. gün tamamlandıysa ve currentDay 8 kaldıysa, otomatik olarak 15. güne geçir
+    const validNextMilestone = SEVEN_DAY_REWARDS.find(m => !this.milestoneData.claimedDays.includes(m.day));
+    if (validNextMilestone && (!SEVEN_DAY_REWARDS.some(m => m.day === this.milestoneData.currentDay) || this.milestoneData.currentDay === 8)) {
+      this.milestoneData.currentDay = validNextMilestone.day;
+      localStorage.setItem('worm_milestone_data', JSON.stringify(this.milestoneData));
+    }
   }
 
   initMilestonesSystem() {
@@ -3391,15 +3419,12 @@ class WormArenaGame {
 
   checkMilestoneProgress(score) {
     if (!this.milestoneData) this.initQuestsSystem();
-    const day = this.milestoneData.currentDay;
-    if (day > 7) return;
+    const ms = SEVEN_DAY_REWARDS.find(m => m.day === this.milestoneData.currentDay);
+    if (!ms) return;
 
-    const ms = SEVEN_DAY_MILESTONES[day - 1];
-    if (ms) {
-      if (score > this.milestoneData.currentScore) {
-        this.milestoneData.currentScore = score;
-        localStorage.setItem('worm_milestone_data', JSON.stringify(this.milestoneData));
-      }
+    if (score > (this.milestoneData.currentScore || 0)) {
+      this.milestoneData.currentScore = score;
+      localStorage.setItem('worm_milestone_data', JSON.stringify(this.milestoneData));
     }
   }
 
@@ -3423,28 +3448,38 @@ class WormArenaGame {
   renderQuestsUI() {
     const questsList = document.getElementById('questsList');
     const streakDaysRow = document.getElementById('streakDaysRow');
+    const loginCountBadge = document.getElementById('streakLoginCountBadge');
+
+    if (loginCountBadge) {
+      loginCountBadge.textContent = `📅 Toplam Giriş: ${this.totalLoginDays || 1}. Gün`;
+    }
 
     if (questsList) questsList.innerHTML = '';
     if (streakDaysRow) streakDaysRow.innerHTML = '';
 
     if (!this.milestoneData) this.initQuestsSystem();
 
-    // 🎁 7 Günlük Hedef & Mantıklı Ödüller Yolculuğu
+    // 🎁 Günlük Sadakat & Büyük Aşama Ödülleri (1..7, 15, 30, 60, 90, 120+ Günler)
     if (streakDaysRow) {
+      let activeBoxElement = null;
+
       SEVEN_DAY_REWARDS.forEach(ms => {
         const isClaimed = this.milestoneData.claimedDays.includes(ms.day);
         const isCurrent = this.milestoneData.currentDay === ms.day;
-        const currentVal = isClaimed ? ms.target : (isCurrent ? this.milestoneData.currentScore : 0);
-        const canClaim = isCurrent && !isClaimed && currentVal >= ms.target;
-        const progressPct = Math.min(100, Math.floor((currentVal / ms.target) * 100));
+        const currentVal = isClaimed ? ms.target : (isCurrent ? (this.milestoneData.currentScore || 0) : 0);
+        // Hem skora ulaşarak hem de toplam giriş günüyle aşama ödülü açılabilir!
+        const reachedTarget = currentVal >= ms.target || (this.totalLoginDays && this.totalLoginDays >= ms.day);
+        const canClaim = isCurrent && !isClaimed && reachedTarget;
+        const progressPct = Math.min(100, Math.floor((Math.max(currentVal, (this.totalLoginDays && isCurrent ? this.totalLoginDays : 0)) / ms.target) * 100));
 
+        const isMajorMilestone = [7, 15, 30, 60, 90, 120, 150, 180, 365].includes(ms.day);
         const box = document.createElement('div');
-        box.className = `streak-day-box ${isClaimed ? 'claimed' : canClaim ? 'claimable-day active-day' : isCurrent ? 'active-day' : ''}`;
+        box.className = `streak-day-box ${isMajorMilestone ? 'major-milestone' : ''} ${isClaimed ? 'claimed' : canClaim ? 'claimable-day active-day' : isCurrent ? 'active-day' : ''}`;
 
         const btnText = isClaimed ? '✓ ALINDI' : canClaim ? '🎁 ÖDÜLÜ AL' : `${currentVal}/${ms.target}`;
 
         box.innerHTML = `
-          <div class="day-badge-tag">GÜN ${ms.day}</div>
+          <div class="day-badge-tag">${ms.tag || ('GÜN ' + ms.day)}</div>
           <div class="day-reward-icon">${ms.rewardIcon}</div>
           <div class="day-reward-val">${ms.rewardText}</div>
           <div class="day-reward-desc">${ms.goalText}</div>
@@ -3452,12 +3487,25 @@ class WormArenaGame {
           <button class="day-action-btn">${btnText}</button>
         `;
 
+        if (isCurrent) {
+          activeBoxElement = box;
+        }
+
         if (canClaim) {
           box.title = 'Ödülünü almak için dokun!';
           box.style.cursor = 'pointer';
           box.addEventListener('click', () => {
-            this.milestoneData.claimedDays.push(ms.day);
-            this.milestoneData.currentDay = Math.min(8, ms.day + 1);
+            if (!this.milestoneData.claimedDays.includes(ms.day)) {
+              this.milestoneData.claimedDays.push(ms.day);
+            }
+
+            // Bir sonraki aşamayı belirle (7 -> 15 -> 30 -> 60 -> 90 -> 120 -> 150 -> 180 -> 365)
+            const curIdx = SEVEN_DAY_REWARDS.findIndex(m => m.day === ms.day);
+            if (curIdx !== -1 && curIdx < SEVEN_DAY_REWARDS.length - 1) {
+              this.milestoneData.currentDay = SEVEN_DAY_REWARDS[curIdx + 1].day;
+            } else {
+              this.milestoneData.currentDay = 999;
+            }
             this.milestoneData.currentScore = 0;
             localStorage.setItem('worm_milestone_data', JSON.stringify(this.milestoneData));
 
@@ -3467,15 +3515,25 @@ class WormArenaGame {
               this.unlockedHats.push(ms.rewardItem);
               localStorage.setItem('worm_unlocked_hats', JSON.stringify(this.unlockedHats));
             }
+            if (ms.rewardSkin && !this.unlockedSkins.includes(ms.rewardSkin)) {
+              this.unlockedSkins.push(ms.rewardSkin);
+              localStorage.setItem('worm_unlocked_skins', JSON.stringify(this.unlockedSkins));
+            }
 
             sounds.playWheelWin();
-            window.showInGameAlert(`🎉 TEBRİKLER! ${ms.rewardText} Ödülünü Kazandın!`, 'level_up', '🎁 ÖDÜL AÇILDI');
+            window.showInGameAlert(`🎉 TEBRİKLER! ${ms.day}. Gün Büyük Aşama Ödülü (${ms.rewardText}) Açıldı!`, 'level_up', '🎁 EFSANEVİ AŞAMA ÖDÜLÜ');
             this.renderQuestsUI();
             this.updateEconomyUI();
           });
         }
         streakDaysRow.appendChild(box);
       });
+
+      if (activeBoxElement) {
+        setTimeout(() => {
+          activeBoxElement.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }, 120);
+      }
     }
 
     // 🎯 Mantıklı Günlük Arena Görevleri

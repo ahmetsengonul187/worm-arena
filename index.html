@@ -452,11 +452,14 @@
           <button class="close-modal-btn" id="closeQuestsBtn">✕</button>
         </div>
 
-        <!-- 7 Günlük Aşama & Mantıklı Ödül Yolculuğu (Somut Altın, XP ve Özel Başlık Ödülleri) -->
+        <!-- Uzun Vadeli Sadakat & Aşama Yolculuğu (7, 15, 30, 60, 90, 120+ Günler) -->
         <div class="daily-streak-card">
           <div class="streak-header-info">
-            <span class="streak-title">🎁 7 GÜNLÜK HEDEF & ÖDÜL YOLCULUĞU</span>
-            <span class="streak-subtitle">Her günün skor hedefine ulaş; dev altın ödülleri, XP ve efsanevi başlıklar kazan!</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 4px;">
+              <span class="streak-title" style="margin-bottom: 0;">🎁 GÜNLÜK SADAKAT & EFSANEVİ ÖDÜL YOLCULUĞU</span>
+              <span class="streak-badge" id="streakLoginCountBadge" style="font-size: 0.72rem; font-weight: 800; color: #00ffcc; background: rgba(0,255,204,0.12); border: 1px solid rgba(0,255,204,0.3); padding: 3px 10px; border-radius: 8px;">📅 Giriş: 1. Gün</span>
+            </div>
+            <span class="streak-subtitle">Her gün arenada büyü ve günleri devir; 7, 15, 30, 60, 90, 120. günlerde devasa altınlar, efsanevi kostümler ve başlıklar kazan!</span>
           </div>
           <div class="streak-days-row" id="streakDaysRow">
             <!-- JS ile dinamik doldurulur -->
