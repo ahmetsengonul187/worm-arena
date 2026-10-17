@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -53,9 +54,54 @@ public class MainActivity extends AppCompatActivity {
 
             webView.setWebViewClient(new WebViewClient() {
                 @Override
-                public boolean shouldOverrideUrlLoading(WebView view,
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    if (request != null && request.getUrl() != null) {
+                        WebResourceResponse response = handleAssetIntercept(request.getUrl());
+                        if (response != null) return response;
+                    }
+                    return super.shouldInterceptRequest(view, request);
+                }
 
-                                                        WebResourceRequest request) {
+                @SuppressWarnings("deprecation")
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+                    if (url != null) {
+                        WebResourceResponse response = handleAssetIntercept(Uri.parse(url));
+                        if (response != null) return response;
+                    }
+                    return super.shouldInterceptRequest(view, url);
+                }
+
+                private WebResourceResponse handleAssetIntercept(Uri uri) {
+                    if (uri == null) return null;
+                    String urlStr = uri.toString();
+                    if (urlStr.startsWith("file:///android_asset/")) {
+                        String assetPath = urlStr.substring("file:///android_asset/".length());
+                        int queryIdx = assetPath.indexOf('?');
+                        if (queryIdx != -1) {
+                            assetPath = assetPath.substring(0, queryIdx);
+                        }
+                        int hashIdx = assetPath.indexOf('#');
+                        if (hashIdx != -1) {
+                            assetPath = assetPath.substring(0, hashIdx);
+                        }
+                        try {
+                            String mimeType = "text/plain";
+                            if (assetPath.endsWith(".html")) mimeType = "text/html";
+                            else if (assetPath.endsWith(".js")) mimeType = "application/javascript";
+                            else if (assetPath.endsWith(".css")) mimeType = "text/css";
+                            else if (assetPath.endsWith(".png")) mimeType = "image/png";
+                            else if (assetPath.endsWith(".jpg") || assetPath.endsWith(".jpeg")) mimeType = "image/jpeg";
+                            else if (assetPath.endsWith(".json")) mimeType = "application/json";
+                            java.io.InputStream is = getAssets().open(assetPath);
+                            return new WebResourceResponse(mimeType, "UTF-8", is);
+                        } catch (Exception ignored) {}
+                    }
+                    return null;
+                }
+
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                     if (request != null && request.getUrl() != null) {
                         return handleUrl(request.getUrl().toString());
                     }

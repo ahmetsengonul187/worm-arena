@@ -1470,6 +1470,28 @@ window.alert = function(msg) {
   window.showInGameAlert(msg, type, title);
 };
 
+function safeGetStorage(key, defaultValue = null) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const val = localStorage.getItem(key);
+      return val !== null ? val : defaultValue;
+    }
+  } catch (e) {
+    console.warn('Storage read warning:', key, e);
+  }
+  return defaultValue;
+}
+
+function safeSetStorage(key, value) {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, value);
+    }
+  } catch (e) {
+    console.warn('Storage write warning:', key, e);
+  }
+}
+
 class WormArenaGame {
   constructor() {
     this.canvas = document.getElementById('arenaCanvas');
@@ -1481,11 +1503,19 @@ class WormArenaGame {
     this.network = new NetworkManager(this);
 
     // Oyuncu Ekonomisi & İlerleme
-    this.coins = parseInt(localStorage.getItem('worm_coins') || '120', 10);
-    this.xp = parseInt(localStorage.getItem('worm_xp') || '25', 10);
-    this.unlockedHats = JSON.parse(localStorage.getItem('worm_unlocked_hats') || '["none"]');
-    this.unlockedSkins = JSON.parse(localStorage.getItem('worm_unlocked_skins') || '["white_king"]');
-    this.equippedHat = localStorage.getItem('worm_equipped_hat') || 'none';
+    this.coins = parseInt(safeGetStorage('worm_coins', '120'), 10) || 120;
+    this.xp = parseInt(safeGetStorage('worm_xp', '25'), 10) || 25;
+    try {
+      this.unlockedHats = JSON.parse(safeGetStorage('worm_unlocked_hats', '["none"]'));
+    } catch (e) {
+      this.unlockedHats = ['none'];
+    }
+    try {
+      this.unlockedSkins = JSON.parse(safeGetStorage('worm_unlocked_skins', '["white_king"]'));
+    } catch (e) {
+      this.unlockedSkins = ['white_king'];
+    }
+    this.equippedHat = safeGetStorage('worm_equipped_hat', 'none') || 'none';
 
     // Görevler & Seri
     this.initQuestsSystem();
@@ -1511,7 +1541,7 @@ class WormArenaGame {
     this.eventTimer = 0;
     this.eventDuration = 0;
 
-    this.diamonds = parseInt(localStorage.getItem('worm_diamonds') || '25', 10);
+    this.diamonds = parseInt(safeGetStorage('worm_diamonds', '25'), 10) || 25;
     this.selectedSkinIndex = 0;
     this.state = 'START';
     this.bestRank = 99;
@@ -1578,7 +1608,7 @@ class WormArenaGame {
   }
 
   loadSavedPlayerName() {
-    const savedName = localStorage.getItem('worm_player_name');
+    const savedName = safeGetStorage('worm_player_name', '');
     const nameInput = document.getElementById('playerNameInput');
     if (nameInput && savedName) {
       nameInput.value = savedName;
@@ -1586,13 +1616,27 @@ class WormArenaGame {
   }
 
   initSettings() {
-    this.settings = JSON.parse(localStorage.getItem('worm_settings') || 'null') || {
-      sfx: true,
-      music: true,
-      vibrate: true,
-      controlMode: 'dynamic',
-      boostPosition: 'right',
-      minimap: true,
+    try {
+      this.settings = JSON.parse(safeGetStorage('worm_settings', 'null')) || {
+        sfx: true,
+        music: true,
+        vibrate: true,
+        controlMode: 'dynamic',
+        boostPosition: 'right',
+        minimap: true,
+        graphics: 'high'
+      };
+    } catch (e) {
+      this.settings = {
+        sfx: true,
+        music: true,
+        vibrate: true,
+        controlMode: 'dynamic',
+        boostPosition: 'right',
+        minimap: true,
+        graphics: 'high'
+      };
+    }
       cameraZoom: 'normal',
       highFps: true
     };
@@ -1721,7 +1765,7 @@ class WormArenaGame {
   }
 
   saveSettings() {
-    localStorage.setItem('worm_settings', JSON.stringify(this.settings));
+    safeSetStorage('worm_settings', JSON.stringify(this.settings));
   }
 
   applyBoostPosition() {
@@ -3082,18 +3126,35 @@ class WormArenaGame {
 
   // ==================== GÖREVLER & 7 GÜNLÜK HEDEF VE ROZET SİSTEMİ ====================
   initQuestsSystem() {
-    this.quests = JSON.parse(localStorage.getItem('worm_quests') || 'null') || [
-      { id: 'kill_worms', title: '3 Solucan Yok Et 💀', target: 3, current: 0, reward: 150, claimed: false },
-      { id: 'reach_score', title: '1000 Skora Ulaş ⭐', target: 1000, current: 0, reward: 200, claimed: false },
-      { id: 'collect_gold', title: '15 Altın / Değerli Meyve Topla 🪙', target: 15, current: 0, reward: 120, claimed: false }
-    ];
+    try {
+      this.quests = JSON.parse(safeGetStorage('worm_quests', 'null')) || [
+        { id: 'kill_worms', title: '3 Solucan Yok Et 💀', target: 3, current: 0, reward: 150, claimed: false },
+        { id: 'reach_score', title: '1000 Skora Ulaş ⭐', target: 1000, current: 0, reward: 200, claimed: false },
+        { id: 'collect_gold', title: '15 Altın / Değerli Meyve Topla 🪙', target: 15, current: 0, reward: 120, claimed: false }
+      ];
+    } catch (e) {
+      this.quests = [
+        { id: 'kill_worms', title: '3 Solucan Yok Et 💀', target: 3, current: 0, reward: 150, claimed: false },
+        { id: 'reach_score', title: '1000 Skora Ulaş ⭐', target: 1000, current: 0, reward: 200, claimed: false },
+        { id: 'collect_gold', title: '15 Altın / Değerli Meyve Topla 🪙', target: 15, current: 0, reward: 120, claimed: false }
+      ];
+    }
 
-    this.milestoneData = JSON.parse(localStorage.getItem('worm_milestone_data') || 'null') || {
-      currentDay: 1,
-      currentScore: 0,
-      claimedDays: [],
-      unlockedBadges: ['🥉']
-    };
+    try {
+      this.milestoneData = JSON.parse(safeGetStorage('worm_milestone_data', 'null')) || {
+        currentDay: 1,
+        currentScore: 0,
+        claimedDays: [],
+        unlockedBadges: ['🥉']
+      };
+    } catch (e) {
+      this.milestoneData = {
+        currentDay: 1,
+        currentScore: 0,
+        claimedDays: [],
+        unlockedBadges: ['🥉']
+      };
+    }
   }
 
   initMilestonesSystem() {

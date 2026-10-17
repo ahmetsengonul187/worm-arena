@@ -18,12 +18,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;900&family=Fredoka+One&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="style.css?v=3.2">
+  <link rel="stylesheet" href="style.css">
   <!-- WebRTC Çok Oyunculu Kütüphanesi (Yerel Dosya + Güvenli CDN Yedeği) -->
   <script src="peerjs.min.js"></script>
   <script>
     if (typeof Peer === 'undefined') {
-      document.write('<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"><\/script>');
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+      s.async = true;
+      document.head.appendChild(s);
     }
   </script>
 </head>
@@ -626,8 +629,8 @@
     </div>
   </div>
 
-  <script src="audio.js?v=3.5"></script>
-  <script src="network.js?v=3.5"></script>
-  <script src="game.js?v=3.5"></script>
+  <script src="audio.js"></script>
+  <script src="network.js"></script>
+  <script src="game.js"></script>
 </body>
 </html>
