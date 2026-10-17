@@ -893,9 +893,16 @@ class Worm {
     let diff = this.targetAngle - this.angle;
     while (diff < -Math.PI) diff += Math.PI * 2;
     while (diff > Math.PI) diff -= Math.PI * 2;
-    this.angle += diff * this.turnSpeed;
+    const currentTurnSpeed = this.isBoosting ? 0.17 : 0.14;
+    this.angle += diff * currentTurnSpeed;
 
-    // Başı İlerlet
+    // Açıyı [-PI, PI] aralığında normalize et (Açı taşması ve yön kilitlenmesini kesin önler)
+    while (this.angle < -Math.PI) this.angle += Math.PI * 2;
+    while (this.angle > Math.PI) this.angle -= Math.PI * 2;
+
+    // Başı İlerlet (Önceki koordinatı swept-circle yem yeme için kaydet)
+    this.prevX = this.x;
+    this.prevY = this.y;
     this.x += Math.cos(this.angle) * this.speed;
     this.y += Math.sin(this.angle) * this.speed;
 
@@ -2235,6 +2242,17 @@ class WormArenaGame {
       const allWorms = [this.player, ...this.network.remotePlayers.values()];
       this.player.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
 
+      // İstemcide yerel yem yeme kontrolü (Yıldızlar ve tüm yemler anında yenir, 0 gecikme!)
+      const clientEaten = this.checkFoodEating([this.player]);
+      if (clientEaten && clientEaten.length > 0 && this.network && this.network.isConnReady(this.network.hostConn)) {
+        try {
+          this.network.hostConn.send({
+            type: 'CLIENT_ATE_FOOD',
+            eaten: clientEaten.map(f => ({ x: f.x, y: f.y, points: f.points, type: f.type }))
+          });
+        } catch (e) {}
+      }
+
       // Arena duvarına çarpma kontrolü
       if (this.player.isDead) {
         this.handlePlayerDeath('Arena Duvarına');
@@ -2315,7 +2333,7 @@ class WormArenaGame {
     }
 
     const newFoods = [];
-    const eatenIndices = this.checkFoodEating(allWorms, newFoods);
+    const eatenList = this.checkFoodEating(allWorms, newFoods);
 
     // Solucan Çarpışmaları (Kafa ve Gövde)
     this.checkWormCollisions(allWorms);
@@ -2327,11 +2345,18 @@ class WormArenaGame {
       if (newFoods.length > 0) {
         this.pendingNewFoods.push(...newFoods);
       }
+      if (!this.pendingEatenFoods) this.pendingEatenFoods = [];
+      if (eatenList.length > 0) {
+        this.pendingEatenFoods.push(...eatenList);
+      }
       const hasPendingFoods = this.pendingNewFoods.length > 0;
-      if (this.broadcastTickCounter % 2 === 0 || hasPendingFoods) {
+      const hasPendingEaten = this.pendingEatenFoods.length > 0;
+      if (this.broadcastTickCounter % 2 === 0 || hasPendingFoods || hasPendingEaten) {
         const foodsToSend = this.pendingNewFoods;
+        const eatenToSend = this.pendingEatenFoods;
         this.pendingNewFoods = [];
-        this.network.broadcastState(allWorms, foodsToSend, eatenIndices);
+        this.pendingEatenFoods = [];
+        this.network.broadcastState(allWorms, foodsToSend, eatenToSend);
       }
     }
 
@@ -2381,23 +2406,60 @@ class WormArenaGame {
     }, 6000);
   }
 
-  checkFoodEating(allWorms, newFoods) {
-    const eatenIndices = [];
+  checkFoodEating(allWorms, newFoods = null) {
+    const eatenList = [];
 
     for (const worm of allWorms) {
       if (worm.isDead) continue;
-      const eatRadius = worm.radius + 12;
+      // Cömert ve gerçekçi yeme yarıçapı (Yılanın kafası yıldıza veya yeme dokunduğu anda anında yutulur!)
+      const baseEatRadius = Math.max(48, worm.radius * 2.0 + 20);
+      const eatRadius = worm.magnetTimer > 0 ? Math.max(baseEatRadius, 160) : baseEatRadius;
       const eatRadiusSq = eatRadius * eatRadius;
+
+      // Yılanın burnu/ağzı merkezden 1.1*radius öne uzanır (Kafanın ön ucu)
+      const snoutDist = worm.radius * 1.1;
+      const snoutX = worm.x + Math.cos(worm.angle) * snoutDist;
+      const snoutY = worm.y + Math.sin(worm.angle) * snoutDist;
+      const snoutRadiusSq = (baseEatRadius * 0.95) * (baseEatRadius * 0.95);
+
+      // Yılanın bu karedeki hareket çizgisi (Swept circle - Hızlıyken yemlerin üzerinden atlamayı %100 bitirir)
+      const prevX = worm.prevX !== undefined ? worm.prevX : worm.x;
+      const prevY = worm.prevY !== undefined ? worm.prevY : worm.y;
+      const segDx = worm.x - prevX;
+      const segDy = worm.y - prevY;
+      const segLenSq = segDx * segDx + segDy * segDy;
 
       for (let i = this.foods.length - 1; i >= 0; i--) {
         const food = this.foods[i];
-        const dx = food.x - worm.x;
-        if (dx > eatRadius || dx < -eatRadius) continue;
-        const dy = food.y - worm.y;
-        if (dy > eatRadius || dy < -eatRadius) continue;
 
-        if (dx * dx + dy * dy < eatRadiusSq) {
-          let pts = food.points;
+        // 1. Ağız / Burun ucu mesafesi
+        const sdx = food.x - snoutX;
+        const sdy = food.y - snoutY;
+        let isEaten = (sdx * sdx + sdy * sdy < snoutRadiusSq);
+
+        // 2. Kafa merkezi veya swept çizgi mesafesi
+        if (!isEaten) {
+          let distSq;
+          if (segLenSq > 0) {
+            let t = ((food.x - prevX) * segDx + (food.y - prevY) * segDy) / segLenSq;
+            t = Math.max(0, Math.min(1, t));
+            const closeX = prevX + t * segDx;
+            const closeY = prevY + t * segDy;
+            const cdx = food.x - closeX;
+            const cdy = food.y - closeY;
+            distSq = cdx * cdx + cdy * cdy;
+          } else {
+            const cdx = food.x - worm.x;
+            const cdy = food.y - worm.y;
+            distSq = cdx * cdx + cdy * cdy;
+          }
+          if (distSq < eatRadiusSq) {
+            isEaten = true;
+          }
+        }
+
+        if (isEaten) {
+          let pts = food.points || 5;
           if (worm.doublePointsTimer > 0) pts *= 2;
           worm.score += pts;
 
@@ -2414,7 +2476,7 @@ class WormArenaGame {
 
           if (worm === this.player) {
             sounds.playEat();
-            if (food.points > 10) {
+            if (food.points > 10 || food.type === 'star_coin') {
               sounds.playCoin();
               this.vibrate(20);
               this.checkQuestProgress('collect_gold');
@@ -2422,17 +2484,23 @@ class WormArenaGame {
           }
 
           this.createFoodBurst(food.x, food.y, food.color);
+          eatenList.push({
+            x: Math.round(food.x),
+            y: Math.round(food.y),
+            points: food.points,
+            type: food.type,
+            index: i
+          });
           this.foods.splice(i, 1);
-          eatenIndices.push(i);
 
-          if (this.foods.length < 550) {
+          if (newFoods && this.foods.length < 600) {
             const nf = this.spawnFood();
             newFoods.push({ x: Math.round(nf.x), y: Math.round(nf.y), type: nf.type });
           }
         }
       }
     }
-    return eatenIndices;
+    return eatenList;
   }
 
   checkWormCollisions(allWorms) {
@@ -4282,16 +4350,16 @@ class WormArenaGame {
   initEvents() {
     window.addEventListener('resize', () => this.initCanvasSize());
 
-    const updateSteering = (clientX, clientY) => {
+    // Farenin veya ekran noktasının yılanın kafasına göre 360° hedefini belirle (Slither.io / Wormate tarzı)
+    const updateSteeringFromScreenPos = (clientX, clientY) => {
       if (!this.player || (this.state !== 'PLAYING' && this.state !== 'DYING')) return;
 
-      // Farenin ekran koordinatı ile yılanın kafasının ekran koordinatı arasındaki açı
       const playerScreenX = this.player.x - this.camera.x;
       const playerScreenY = this.player.y - this.camera.y;
 
       const dx = clientX - playerScreenX;
       const dy = clientY - playerScreenY;
-      if (Math.hypot(dx, dy) > 10) {
+      if (dx * dx + dy * dy > 64) { // > 8px
         this.player.targetAngle = Math.atan2(dy, dx);
       }
     };
@@ -4326,18 +4394,18 @@ class WormArenaGame {
       }
     });
 
-    // ==================== SANAL JOYSTICK (MOBİL VE TARAYICI DESTEKLİ) ====================
-    let joystickPointerId = null;
+    // ==================== SANAL JOYSTICK (MOBİL VE DOKUNMATİK TAM DESTEK) ====================
+    let activeJoystickTouchId = null;
 
-    const startJoystickAt = (clientX, clientY, identifier) => {
-      joystickPointerId = identifier;
+    const startJoystickAt = (clientX, clientY, touchId) => {
+      activeJoystickTouchId = touchId;
       this.joystick.active = true;
 
       const controlMode = (this.settings && this.settings.controlMode) || 'dynamic';
 
       if (controlMode === 'fixed') {
-        const fixedX = 75;
-        const fixedY = window.innerHeight - 85;
+        const fixedX = 85;
+        const fixedY = window.innerHeight - 95;
         this.joystick.startX = fixedX;
         this.joystick.startY = fixedY;
         this.joystickBase.style.left = `${fixedX}px`;
@@ -4348,9 +4416,9 @@ class WormArenaGame {
         this.joystick.startX = clientX;
         this.joystick.startY = clientY;
         this.joystickBase.classList.add('hidden');
-        updateSteering(clientX, clientY);
+        updateSteeringFromScreenPos(clientX, clientY);
       } else {
-        // dynamic
+        // dynamic: Dokunulan noktada anında belirir
         this.joystick.startX = clientX;
         this.joystick.startY = clientY;
         this.joystickBase.style.left = `${clientX}px`;
@@ -4366,7 +4434,7 @@ class WormArenaGame {
       const controlMode = (this.settings && this.settings.controlMode) || 'dynamic';
 
       if (controlMode === 'direct' || !this.joystick.active) {
-        updateSteering(clientX, clientY);
+        updateSteeringFromScreenPos(clientX, clientY);
         return;
       }
 
@@ -4383,78 +4451,56 @@ class WormArenaGame {
         const thumbX = Math.cos(angle) * clampedDist;
         const thumbY = Math.sin(angle) * clampedDist;
         this.joystickThumb.style.transform = `translate(calc(-50% + ${thumbX}px), calc(-50% + ${thumbY}px))`;
-      }
-    };
 
-    const stopJoystick = (identifier) => {
-      if (identifier === undefined || identifier === joystickPointerId || joystickPointerId === null) {
-        joystickPointerId = null;
-        this.joystick.active = false;
-        const controlMode = (this.settings && this.settings.controlMode) || 'dynamic';
-        if (controlMode !== 'fixed') {
-          this.joystickBase.classList.add('hidden');
-        } else {
-          this.joystickThumb.style.transform = 'translate(-50%, -50%)';
+        // Parmağın çok uzağa kayması durumunda joystick merkezini hafifçe takip ettir (Dinamik Konfor)
+        if (controlMode === 'dynamic' && dist > maxR * 1.6) {
+          const excess = dist - maxR * 1.6;
+          this.joystick.startX += Math.cos(angle) * excess;
+          this.joystick.startY += Math.sin(angle) * excess;
+          this.joystickBase.style.left = `${this.joystick.startX}px`;
+          this.joystickBase.style.top = `${this.joystick.startY}px`;
         }
       }
     };
 
-    // İşaretçi (Fare Tıklama & Sürükleme veya Dokunmatik)
-    const onPointerDown = (e) => {
+    const stopJoystick = () => {
+      activeJoystickTouchId = null;
+      this.joystick.active = false;
+      const controlMode = (this.settings && this.settings.controlMode) || 'dynamic';
+      if (controlMode !== 'fixed') {
+        this.joystickBase.classList.add('hidden');
+      } else {
+        this.joystickThumb.style.transform = 'translate(-50%, -50%)';
+      }
+    };
+
+    // ==================== DOKUNMATİK ETKİNLİKLERİ (TOUCH EVENTS - MOBİL) ====================
+    const isUiTouch = (clientX, clientY) => {
+      const el = document.elementFromPoint(clientX, clientY);
+      return !!(el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop, .modal-dialog'));
+    };
+
+    const handleTouchStart = (e) => {
       if (this.state !== 'PLAYING') return;
-      if (e.button !== undefined && e.button !== 0) return; // Sadece sol tık
 
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      if (el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop')) {
-        return;
-      }
-
-      startJoystickAt(e.clientX, e.clientY, e.pointerId !== undefined ? e.pointerId : 'mouse');
-    };
-
-    const onPointerMove = (e) => {
-      if (this.state !== 'PLAYING' || !this.player) return;
-
-      const pId = e.pointerId !== undefined ? e.pointerId : 'mouse';
-      if (this.joystick.active && (joystickPointerId === pId || joystickPointerId === null)) {
-        moveJoystickAt(e.clientX, e.clientY);
-      } else if (!this.joystick.active && e.pointerType === 'mouse' && e.buttons === 0) {
-        updateSteering(e.clientX, e.clientY);
-      }
-    };
-
-    const onPointerUp = (e) => {
-      const pId = e.pointerId !== undefined ? e.pointerId : 'mouse';
-      if (this.joystick.active && (joystickPointerId === pId || joystickPointerId === null)) {
-        stopJoystick(pId);
-      }
-    };
-
-    window.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
-
-    // Dokunmatik cihazlar için özel touch eventleri (iOS & Android WebView tam uyumluluk)
-    const onScreenTouchStart = (e) => {
-      if (this.state !== 'PLAYING') return;
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
-        const el = document.elementFromPoint(t.clientX, t.clientY);
-        if (el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop')) {
-          continue;
+        if (isUiTouch(t.clientX, t.clientY)) continue;
+
+        if (activeJoystickTouchId === null) {
+          e.preventDefault();
+          startJoystickAt(t.clientX, t.clientY, t.identifier);
+          break;
         }
-        e.preventDefault();
-        startJoystickAt(t.clientX, t.clientY, t.identifier);
-        break;
       }
     };
 
-    const onScreenTouchMove = (e) => {
-      if (this.state !== 'PLAYING' || !this.player) return;
+    const handleTouchMove = (e) => {
+      if (this.state !== 'PLAYING' || !this.player || activeJoystickTouchId === null) return;
+
       for (let i = 0; i < e.touches.length; i++) {
         const t = e.touches[i];
-        if (t.identifier === joystickPointerId || e.touches.length === 1) {
+        if (t.identifier === activeJoystickTouchId) {
           e.preventDefault();
           moveJoystickAt(t.clientX, t.clientY);
           break;
@@ -4462,32 +4508,51 @@ class WormArenaGame {
       }
     };
 
-    const onScreenTouchEnd = (e) => {
-      if (e.touches.length === 0) {
-        stopJoystick();
-        return;
-      }
+    const handleTouchEnd = (e) => {
+      if (activeJoystickTouchId === null) return;
+
+      let touchEnded = false;
       for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === joystickPointerId) {
-          stopJoystick(e.changedTouches[i].identifier);
+        if (e.changedTouches[i].identifier === activeJoystickTouchId) {
+          touchEnded = true;
           break;
         }
       }
+      if (touchEnded || e.touches.length === 0) {
+        stopJoystick();
+      }
     };
 
-    this.joystickZone.addEventListener('touchstart', onScreenTouchStart, { passive: false });
-    this.joystickZone.addEventListener('touchmove', onScreenTouchMove, { passive: false });
-    this.joystickZone.addEventListener('touchend', onScreenTouchEnd, { passive: true });
-    this.joystickZone.addEventListener('touchcancel', onScreenTouchEnd, { passive: true });
+    // Dokunmatik dinleyicilerini joystick alanına ve canvasa bağla
+    this.joystickZone.addEventListener('touchstart', handleTouchStart, { passive: false });
+    this.canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
 
-    this.canvas.addEventListener('touchstart', onScreenTouchStart, { passive: false });
-    this.canvas.addEventListener('touchmove', onScreenTouchMove, { passive: false });
-    this.canvas.addEventListener('touchend', onScreenTouchEnd, { passive: true });
-    this.canvas.addEventListener('touchcancel', onScreenTouchEnd, { passive: true });
+    // TouchMove ve TouchEnd window üzerinde dinlenir (parmak ekran kenarına kaysa bile kontrol kopmaz!)
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', handleTouchEnd, { passive: true });
 
-    window.addEventListener('touchmove', onScreenTouchMove, { passive: false });
-    window.addEventListener('touchend', onScreenTouchEnd, { passive: true });
-    window.addEventListener('touchcancel', onScreenTouchEnd, { passive: true });
+    // ==================== FARE KONTROLLERİ (MOUSE EVENTS - TARAYICI & MASAÜSTÜ) ====================
+    window.addEventListener('mousemove', (e) => {
+      // Eğer mobilde dokunmatik joystick aktifse fare hareketini yoksay
+      if (activeJoystickTouchId !== null || this.state !== 'PLAYING' || !this.player) return;
+      updateSteeringFromScreenPos(e.clientX, e.clientY);
+    });
+
+    // Masaüstü fare sol tık ile Turbo Hızlanma (Slither.io klasiği)
+    this.canvas.addEventListener('mousedown', (e) => {
+      if (e.button !== 0 || this.state !== 'PLAYING' || !this.player || activeJoystickTouchId !== null) return;
+      if (this.boostState === 'READY') {
+        this.startTurboBoost();
+      }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (e.button !== 0 || activeJoystickTouchId !== null) return;
+      if (this.boostState === 'BOOSTING') {
+        this.stopTurboBoost();
+      }
+    });
 
     // Turbo Hızlanma (Tek Dokunuşla Başlatma & Dairesel Sayaç)
     const onBoostToggle = (e) => {

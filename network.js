@@ -391,6 +391,21 @@ class NetworkManager {
         worm.targetAngle = data.targetAngle;
         worm.isBoosting = !!data.isBoosting;
       }
+    } else if (data.type === 'CLIENT_ATE_FOOD') {
+      const rw = this.remotePlayers.get(peerId);
+      if (data.eaten && Array.isArray(data.eaten)) {
+        if (!this.game.pendingEatenFoods) this.game.pendingEatenFoods = [];
+        data.eaten.forEach(ef => {
+          if (rw && !rw.isDead) {
+            rw.score += (ef.points || 5);
+          }
+          const foundIdx = this.game.foods.findIndex(f => Math.hypot(f.x - ef.x, f.y - ef.y) < 65);
+          if (foundIdx !== -1) {
+            this.game.foods.splice(foundIdx, 1);
+            this.game.pendingEatenFoods.push(ef);
+          }
+        });
+      }
     } else if (data.type === 'CLIENT_DIED') {
       const rw = this.remotePlayers.get(peerId);
       if (rw && !rw.isDead) {
@@ -848,13 +863,20 @@ class NetworkManager {
         }
       }
 
-      // Yenen / Yeni çıkan yiyecekleri senkronize et
+      // Yenen / Yeni çıkan yiyecekleri senkronize et (Yıldızlar ve tüm yemler)
       if (data.newFoods && data.newFoods.length > 0) {
         data.newFoods.forEach(nf => {
           this.game.spawnFood(nf.x, nf.y, nf.type);
         });
       }
-      if (data.eatenIndices && data.eatenIndices.length > 0) {
+      if (data.eatenFoods && data.eatenFoods.length > 0) {
+        data.eatenFoods.forEach(ef => {
+          const idx = this.game.foods.findIndex(f => Math.hypot(f.x - ef.x, f.y - ef.y) < 65);
+          if (idx !== -1) {
+            this.game.foods.splice(idx, 1);
+          }
+        });
+      } else if (data.eatenIndices && data.eatenIndices.length > 0) {
         data.eatenIndices.sort((a, b) => b - a).forEach(idx => {
           if (this.game.foods[idx]) this.game.foods.splice(idx, 1);
         });
@@ -864,7 +886,7 @@ class NetworkManager {
 
   // ==================== 4. ANLIK DURUM YAYINI (HOST) ====================
   // Host: Tüm bağlı istemcilere anlık oyun durumunu yayınlar (Throttled & Downsampled)
-  broadcastState(worms, newFoods = [], eatenIndices = []) {
+  broadcastState(worms, newFoods = [], eatenFoods = []) {
     if (!this.isHost || this.connections.size === 0) return;
     // Oyun henüz başlatılmadıysa (lobideyken) kesinlikle istemcilere tick yayını gönderme!
     if (this.game.state !== 'PLAYING' && this.game.state !== 'DYING' && this.game.state !== 'GAMEOVER') return;
@@ -906,7 +928,7 @@ class NetworkManager {
         };
       }),
       newFoods: newFoods,
-      eatenIndices: eatenIndices
+      eatenFoods: eatenFoods
     };
 
     this.connections.forEach(conn => {
