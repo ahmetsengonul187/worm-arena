@@ -2207,8 +2207,6 @@ class WormArenaGame {
     const allWorms = this.player
       ? [this.player, ...this.bots, ...remotePlayersList]
       : [...this.bots, ...remotePlayersList];
-      ? [this.player, ...this.bots, ...remotePlayersList]
-      : [...this.bots, ...remotePlayersList];
 
     // Host oyuncusu canlıysa hareket ettir
     if (this.player && !this.player.isDead) {
