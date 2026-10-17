@@ -4197,27 +4197,54 @@ class WormArenaGame {
       });
     }
 
-    // 2. Web Katılım Linkini Kopyala
+    // 2. Web Katılım Linkini Paylaş (Doğrudan Paylaşım Menüsü veya Panoya Kopyalama)
     if (copyRoomLinkBtn) {
-      copyRoomLinkBtn.addEventListener('click', () => {
+      copyRoomLinkBtn.addEventListener('click', async () => {
         const roomCode = this.network.roomCode;
         if (!roomCode) {
           window.showInGameAlert('Oda kodu hazırlanıyor, lütfen bekleyin...', 'warning');
           return;
         }
         const inviteUrl = this.getInviteLink(roomCode);
-        navigator.clipboard.writeText(inviteUrl).then(() => {
+        const shareData = {
+          title: 'Worm Arena - Yılan Savaşı',
+          text: `Worm Arena odama davetlisin! Tek tıkla tarayıcıdan savaşa katıl (Oda Kodu: ${roomCode}):\n`,
+          url: inviteUrl
+        };
+
+        if (navigator.share) {
+          try {
+            await navigator.share(shareData);
+            return;
+          } catch (err) {
+            if (err && err.name === 'AbortError') return;
+          }
+        }
+
+        // Fallback: Panoya kopyala
+        const copyFallback = () => {
           copyRoomLinkBtn.textContent = '✓ Kopyalandı!';
-          setTimeout(() => { copyRoomLinkBtn.textContent = '📋 Linki Kopyala'; }, 2000);
-          window.showInGameAlert('Oda linki kopyalandı! Arkadaşına gönder, tek tıkla tarayıcıda odana girsin.', 'success', '🔗 LİNK KOPYALANDI');
-        }).catch(() => {
+          setTimeout(() => { copyRoomLinkBtn.textContent = '📤 Paylaş'; }, 2000);
+          window.showInGameAlert('Oda linki kopyalandı! Arkadaşına yapıştırıp gönderebilirsin.', 'success', '🔗 LİNK KOPYALANDI');
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(inviteUrl).then(copyFallback).catch(() => {
+            const roomLinkInput = document.getElementById('roomLinkInput');
+            if (roomLinkInput) {
+              roomLinkInput.select();
+              document.execCommand('copy');
+              copyFallback();
+            }
+          });
+        } else {
           const roomLinkInput = document.getElementById('roomLinkInput');
           if (roomLinkInput) {
             roomLinkInput.select();
             document.execCommand('copy');
-            window.showInGameAlert('Oda linki seçildi ve kopyalandı!', 'success');
+            copyFallback();
           }
-        });
+        }
       });
     }
 
@@ -4770,7 +4797,7 @@ class WormArenaGame {
 
   // Arkadaşlara gönderilecek doğrudan web katılım linki
   getInviteLink(code) {
-    const defaultPublicUrl = 'https://ahmetsengonul187.github.io/worm-arena';
+    const defaultPublicUrl = 'https://doguyazilim.github.io/worm-arena';
 
     // Eğer halihazırda canlı bir web sitesi veya GitHub Pages üzerindeyse o anki adresi kullan
     if (window.location.protocol === 'https:' || (window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.startsWith('10.') && !window.location.hostname.startsWith('192.168.'))) {
