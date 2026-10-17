@@ -817,11 +817,11 @@ class Worm {
 
     this.angle = Math.random() * Math.PI * 2;
     this.targetAngle = this.angle;
-    this.turnSpeed = 0.13;
+    this.turnSpeed = 0.14; // Kıvrak ve rahat manevra kabiliyeti
 
-    // Hız Dengesi & Turbo (Hızlı, akıcı ve turbo basıldığında yüksek ivme)
-    this.baseSpeed = 5.2; // İdeal kıvrak ve akıcı normal hız
-    this.boostSpeed = 10.2; // Yüksek adrenalinli, güçlü ve seri turbo hızı
+    // Hız Dengesi & Turbo (Dengeli, akıcı, kontrolü kolay ve adil hız)
+    this.baseSpeed = 3.3; // İdeal kıvrak ve akıcı normal hız (eskiden 5.2 çok hızlıydı)
+    this.boostSpeed = 6.6; // Yüksek adrenalinli ama kontrol edilebilir 2 kat turbo hızı (eskiden 10.2 çok hızlıydı)
     this.speed = this.baseSpeed;
     this.isBoosting = false;
 
@@ -874,7 +874,7 @@ class Worm {
     if (this.isBoosting && this.score > 8) {
       this.speed = this.boostSpeed;
       // Hızlandıkça kütle yakılır: puan düşer, kalınlık ve uzunluk gözle görülür şekilde küçülür
-      this.score = Math.max(8, this.score - 0.28);
+      this.score = Math.max(8, this.score - 0.20);
     } else {
       this.speed = this.baseSpeed;
       this.isBoosting = false;
@@ -1922,8 +1922,10 @@ class WormArenaGame {
 
   // Host için çok oyunculu odayı başlatma
   startMultiplayerHostGame(includeBots = true, spawnX = null, spawnY = null, spawnAngle = 0) {
-    const playerName = this.validatePlayerName(true);
-    if (!playerName) return;
+    let playerName = this.validatePlayerName(true);
+    if (!playerName) {
+      playerName = this.getPlayerName() || `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
+    }
 
     sounds.init();
     const skin = SKINS[this.selectedSkinIndex] || SKINS[0];
@@ -1948,13 +1950,26 @@ class WormArenaGame {
 
     this.state = 'PLAYING';
     this.bestRank = 99;
-    this.startScreen.classList.add('hidden');
-    this.gameOverScreen.classList.add('hidden');
+    if (this.startScreen) {
+      this.startScreen.classList.add('hidden');
+      this.startScreen.style.display = 'none';
+    }
+    if (this.gameOverScreen) {
+      this.gameOverScreen.classList.add('hidden');
+      this.gameOverScreen.style.display = 'none';
+    }
     const multiplayerModal = document.getElementById('multiplayerModal');
     if (multiplayerModal) {
       multiplayerModal.classList.add('hidden');
       multiplayerModal.style.display = 'none';
     }
+    const waitingRoomContent = document.getElementById('waitingRoomTabContent');
+    if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
+    const joinRoomContent = document.getElementById('joinRoomTabContent');
+    if (joinRoomContent) joinRoomContent.classList.add('hidden');
+    const createRoomContent = document.getElementById('createRoomTabContent');
+    if (createRoomContent) createRoomContent.classList.add('hidden');
+
     if (this.joystickZone) this.joystickZone.classList.remove('hidden');
 
     if (this.hudRoomBadge && this.network.roomCode) {
@@ -1971,8 +1986,10 @@ class WormArenaGame {
 
   // İstemci için çok oyunculu oyunu başlatma
   startMultiplayerClientGame(mySpawn = null) {
-    const playerName = this.validatePlayerName(true);
-    if (!playerName) return;
+    let playerName = this.validatePlayerName(true);
+    if (!playerName) {
+      playerName = this.getPlayerName() || `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
+    }
 
     sounds.init();
     const skin = SKINS[this.selectedSkinIndex] || SKINS[0];
@@ -1995,13 +2012,28 @@ class WormArenaGame {
     this.bots = [];
     this.state = 'PLAYING';
     this.bestRank = 99;
-    this.startScreen.classList.add('hidden');
-    this.gameOverScreen.classList.add('hidden');
+
+    // Menü ve Bekleme Odası pencerelerini eksiksiz gizle
+    if (this.startScreen) {
+      this.startScreen.classList.add('hidden');
+      this.startScreen.style.display = 'none';
+    }
+    if (this.gameOverScreen) {
+      this.gameOverScreen.classList.add('hidden');
+      this.gameOverScreen.style.display = 'none';
+    }
     const mModal = document.getElementById('multiplayerModal');
     if (mModal) {
       mModal.classList.add('hidden');
       mModal.style.display = 'none';
     }
+    const waitingRoomContent = document.getElementById('waitingRoomTabContent');
+    if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
+    const joinRoomContent = document.getElementById('joinRoomTabContent');
+    if (joinRoomContent) joinRoomContent.classList.add('hidden');
+    const createRoomContent = document.getElementById('createRoomTabContent');
+    if (createRoomContent) createRoomContent.classList.add('hidden');
+
     if (this.joystickZone) this.joystickZone.classList.remove('hidden');
 
     if (this.hudRoomBadge && this.network.roomCode) {
@@ -2135,7 +2167,13 @@ class WormArenaGame {
     // ==================== CLIENT MODU ====================
     // İstemcide akıcı yerel kontrol + Anlık Kafa-Gövde Çarpışma Hissi
     if (this.network.isMultiplayer && !this.network.isHost) {
-      this.network.sendThrottledInput(this.player.targetAngle, this.player.isBoosting);
+      this.network.sendThrottledInput(
+        this.player.targetAngle,
+        this.player.isBoosting,
+        this.player.x,
+        this.player.y,
+        this.player.angle
+      );
 
       const allWorms = [this.player, ...this.network.remotePlayers.values()];
       this.player.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
@@ -3766,7 +3804,13 @@ class WormArenaGame {
         }
       } else {
         // İSTEMCİ (CLIENT) GÖRÜNÜMÜ: Odaya katılan arkadaş bekleme odasında lobiyi izler
-        if (multiplayerModal) multiplayerModal.classList.remove('hidden');
+        // EĞER OYUN BAŞLADIYSA BEKLEME PENCERESİNİ ASLA TEKRAR AÇMA!
+        if (this.state === 'PLAYING') return;
+
+        if (multiplayerModal) {
+          multiplayerModal.classList.remove('hidden');
+          multiplayerModal.style.display = '';
+        }
         if (roomTabsBar) roomTabsBar.classList.add('hidden');
         if (createRoomContent) createRoomContent.classList.add('hidden');
         if (joinRoomContent) joinRoomContent.classList.add('hidden');
@@ -4540,8 +4584,22 @@ class WormArenaGame {
   }
 
   startLoop() {
-    const loop = () => {
-      this.update();
+    let lastTime = performance.now();
+    const targetDt = 1000 / 60; // 16.666ms sabit 60 FPS fizik adımı (120Hz/144Hz ekranlarda yılanın 2 kat hızlanmasını %100 engeller)
+    let accumulator = 0;
+
+    const loop = (currentTime) => {
+      const now = (typeof currentTime === 'number' && currentTime > 0) ? currentTime : performance.now();
+      let frameTime = now - lastTime;
+      lastTime = now;
+      if (frameTime > 100) frameTime = 100; // Sekme arka plana atıldığında biriken süreyi sınırla
+
+      accumulator += frameTime;
+      while (accumulator >= targetDt) {
+        this.update();
+        accumulator -= targetDt;
+      }
+
       this.draw();
       requestAnimationFrame(loop);
     };
