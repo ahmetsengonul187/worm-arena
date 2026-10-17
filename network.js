@@ -22,6 +22,23 @@ class NetworkManager {
     this.lastSentBoosting = null;
     this.lastInputTime = 0;
 
+    // Arka plan / Sinyal yenileme
+    this.heartbeatInterval = null;
+    this.isReconnectingHost = false;
+
+    // Mobil cihazlarda WhatsApp / sekme geçişi sonrası otomatik bağlantı kurtarma
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          this.handleAppResume();
+        }
+      });
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', () => this.handleAppResume());
+      window.addEventListener('pageshow', () => this.handleAppResume());
+    }
+
     // Callback fonksiyonları
     this.onPlayerJoined = null;
     this.onPlayerLeft = null;
@@ -35,27 +52,19 @@ class NetworkManager {
     return Math.floor(1000 + Math.random() * 9000).toString();
   }
 
-  // STUN & TURN Sunucu Listesi (NAT arkasındaki, Mobil 4G/5G ve Farklı Ağlardaki Oyuncuların Doğrudan veya Röle ile Kesintisiz Bağlanması için)
-  // NOT: Emülatör + aynı bilgisayardaki tarayıcı veya katı NAT arkasındaki cihazlar
-  // doğrudan (STUN) bağlanamaz; bu durumda TURN röle sunucusu ŞARTTIR.
+  // STUN Sunucu Listesi (Google & Cloudflare Yüksek Hızlı ve Küresel STUN Sunucuları)
+  // Yanıt süresi 15-30ms; bozuk/kara delik TURN sunucuları kaldırılarak 20 saniyelik takılma önlenir.
   getIceServers() {
     return [
-      { urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
       {
-        // Open Relay Project (ücretsiz genel TURN rölesi)
         urls: [
-          'turn:openrelay.metered.ca:80',
-          'turn:openrelay.metered.ca:443',
-          'turn:openrelay.metered.ca:443?transport=tcp'
-        ],
-        username: 'openrelayproject',
-        credential: 'openrelayproject'
-      },
-      {
-        // FreeSTUN (ücretsiz genel TURN rölesi - yedek)
-        urls: ['turn:freestun.net:3478', 'turns:freestun.net:5350'],
-        username: 'free',
-        credential: 'free'
+          'stun:stun.l.google.com:19302',
+          'stun:stun1.l.google.com:19302',
+          'stun:stun2.l.google.com:19302',
+          'stun:stun3.l.google.com:19302',
+          'stun:stun4.l.google.com:19302',
+          'stun:stun.cloudflare.com:3478'
+        ]
       }
     ];
   }
@@ -88,7 +97,7 @@ class NetworkManager {
 
       this.peer.on('open', (id) => {
         this.myPeerId = id;
-        console.log('Oda kuruldu! Kod:', this.roomCode);
+        console.log('Oda kuruldu! Kod:', this.roomCode, 'Peer ID:', id);
 
         // Host'un kendi lobi kaydını oluştur
         this.lobbyPlayers.clear();
@@ -98,11 +107,32 @@ class NetworkManager {
         if (this.onRoomReady) this.onRoomReady(this.roomCode);
         if (this.onLobbyUpdated) this.onLobbyUpdated(this.getLobbyList(), this.roomCode);
 
+        // Arka plan / uyku durumunda sinyali canlı tutan periyodik kontrol
+        if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+        this.heartbeatInterval = setInterval(() => {
+          if (!this.isHost || !this.roomCode) return;
+          if (this.peer && this.peer.disconnected && !this.peer.destroyed) {
+            console.log('Host sinyal bağlantısı yenileniyor...');
+            try { this.peer.reconnect(); } catch (e) {}
+          }
+        }, 3000);
+
         resolve(this.roomCode);
       });
 
       this.peer.on('connection', (conn) => {
         this.handleIncomingConnection(conn);
+      });
+
+      this.peer.on('disconnected', () => {
+        console.warn('Oda sahibi sinyal sunucusundan ayrıldı (arka plan / WhatsApp geçişi). Yeniden bağlanılıyor...');
+        if (this.peer && !this.peer.destroyed) {
+          try {
+            this.peer.reconnect();
+          } catch (e) {
+            console.warn('Peer reconnect hatası:', e);
+          }
+        }
       });
 
       this.peer.on('error', (err) => {
@@ -118,6 +148,70 @@ class NetworkManager {
           reject(err);
         }
       });
+    });
+  }
+
+  // Mobil cihazda WhatsApp / başka uygulama sonrası oyuna dönüldüğünde çağrılır
+  handleAppResume() {
+    if (!this.isHost || !this.roomCode) return;
+    console.log('Uygulama ön plana geldi. Oda bağlantısı denetleniyor:', this.roomCode);
+
+    if (!this.peer || this.peer.destroyed) {
+      this.recreateHostPeer();
+      return;
+    }
+
+    if (this.peer.disconnected) {
+      console.log('Host peer sinyal sunucusuna yeniden bağlanıyor...');
+      try {
+        this.peer.reconnect();
+      } catch (e) {
+        console.warn('Reconnect başarısız, peer baştan kuruluyor:', e);
+        this.recreateHostPeer();
+      }
+    }
+  }
+
+  // Gerekirse aynı oda kodu ile Host Peer'ı sıfırdan ayağa kaldır
+  recreateHostPeer() {
+    if (!this.isHost || !this.roomCode || this.isReconnectingHost) return;
+    this.isReconnectingHost = true;
+    const peerId = `wormarena-${this.roomCode}`;
+
+    try {
+      if (this.peer) this.peer.destroy();
+    } catch (e) {}
+
+    console.log('Host Peer sıfırdan oluşturuluyor:', peerId);
+    this.peer = new Peer(peerId, {
+      debug: 1,
+      config: {
+        iceServers: this.getIceServers(),
+        sdpSemantics: 'unified-plan'
+      }
+    });
+
+    this.peer.on('open', (id) => {
+      this.myPeerId = id;
+      this.isReconnectingHost = false;
+      console.log('Host Peer başarıyla yeniden aktif edildi:', id);
+      if (this.onLobbyUpdated) this.onLobbyUpdated(this.getLobbyList(), this.roomCode);
+    });
+
+    this.peer.on('connection', (conn) => {
+      this.handleIncomingConnection(conn);
+    });
+
+    this.peer.on('disconnected', () => {
+      console.warn('Host sinyal koptu, yeniden bağlanılıyor...');
+      if (this.peer && !this.peer.destroyed) {
+        try { this.peer.reconnect(); } catch (e) {}
+      }
+    });
+
+    this.peer.on('error', (err) => {
+      console.warn('Host Peer hata:', err);
+      this.isReconnectingHost = false;
     });
   }
 
@@ -392,10 +486,11 @@ class NetworkManager {
   }
 
   // ==================== 3. ODAYA KATIL (CLIENT OL) ====================
-  // Bağlantı kurulamazsa otomatik olarak 3 kez yeniden dener (TURN rölesi bazen geç cevap verir)
+  // WhatsApp'tan oyuna dönen oda sahibine yeterli zaman tanımak için 6 aşamalı sabırlı yeniden deneme yapar
   joinRoom(code, attempt = 1) {
-    const MAX_ATTEMPTS = 3;
-    const ATTEMPT_TIMEOUT_MS = 20000;
+    const MAX_ATTEMPTS = 6;
+    const ATTEMPT_TIMEOUT_MS = 10000;
+    const RETRY_DELAY_MS = 2500;
 
     return new Promise((resolve, reject) => {
       this.disconnect();
@@ -421,7 +516,7 @@ class NetworkManager {
       if (this.onJoinStatus) {
         this.onJoinStatus(attempt === 1
           ? 'Oda sahibine bağlanılıyor...'
-          : `Bağlantı yeniden deneniyor (${attempt}/${MAX_ATTEMPTS})...`);
+          : `Oda sahibine ulaşılmaya çalışılıyor (${attempt}/${MAX_ATTEMPTS})...`);
       }
 
       // Başarısız denemede: hak varsa yeniden dene, yoksa hata ver
@@ -429,13 +524,16 @@ class NetworkManager {
         if (settled || isStale()) return;
         settled = true;
         clearTimeout(connTimeout);
-        console.warn(`Katılma denemesi ${attempt} başarısız:`, reason);
+        console.warn(`Katılma denemesi ${attempt}/${MAX_ATTEMPTS} başarısız:`, reason);
 
         if (attempt < MAX_ATTEMPTS) {
+          if (this.onJoinStatus) {
+            this.onJoinStatus(`Oda sahibinin oyuna dönmesi bekleniyor (${attempt}/${MAX_ATTEMPTS})... Lütfen bekleyin`);
+          }
           setTimeout(() => {
             if (isStale()) return;
             this.joinRoom(code, attempt + 1).then(resolve).catch(reject);
-          }, 1200);
+          }, RETRY_DELAY_MS);
           return;
         }
 
@@ -452,7 +550,7 @@ class NetworkManager {
         config: {
           iceServers: this.getIceServers(),
           sdpSemantics: 'unified-plan',
-          iceCandidatePoolSize: 4
+          iceCandidatePoolSize: 2
         }
       });
 
@@ -460,7 +558,7 @@ class NetworkManager {
         if (!this.hostConn || !this.hostConn.open) {
           failAttempt(
             new Error('Bağlantı zaman aşımı'),
-            'Oda sahibine ulaşılamadı. Oda sahibinin uygulamasının açık ve odanın kurulu olduğundan emin olup tekrar deneyin.',
+            'Oda sahibine ulaşılamadı. Oda sahibinin telefonunda oyunun açık ve odanın kurulu olduğundan emin olup "Tekrar Bağlan" butonuna basın.',
             '⚠️ BAĞLANTI ZAMAN AŞIMI'
           );
         }
@@ -469,7 +567,7 @@ class NetworkManager {
       this.peer.on('open', (id) => {
         if (isStale()) return;
         this.myPeerId = id;
-        console.log('İstemci Peer oluşturuldu:', id);
+        console.log('İstemci Peer oluşturuldu:', id, 'Hedef Host:', targetHostId);
 
         // Güvenilir veri kanalı ile host'a bağlan
         const conn = this.peer.connect(targetHostId, { reliable: true });
@@ -544,8 +642,8 @@ class NetworkManager {
         let msg = 'Odaya bağlanılamadı. İnternet bağlantınızı kontrol edin.';
         let title = '⚠️ BAĞLANTI HATASI';
         if (err && err.type === 'peer-unavailable') {
-          msg = `"${this.roomCode}" kodlu oda bulunamadı! Oda sahibinin odayı kurduğundan ve uygulamanın açık olduğundan emin olun.`;
-          title = '⚠️ ODA BULUNAMADI';
+          msg = `"${this.roomCode}" kodlu oda sahibi henüz hazır değil. Oda sahibinin telefonunda oyunun açık olduğundan emin olun.`;
+          title = '⚠️ ODA SAHİBİ BEKLENİYOR';
         }
         failAttempt(err, msg, title);
       });
@@ -862,6 +960,11 @@ class NetworkManager {
       } catch (e) {}
       this.peer = null;
     }
+    if (this.heartbeatInterval) {
+      clearInterval(this.heartbeatInterval);
+      this.heartbeatInterval = null;
+    }
+    this.isReconnectingHost = false;
     this.connections.clear();
     this.lobbyPlayers.clear();
     this.remotePlayers.clear();

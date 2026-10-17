@@ -4570,8 +4570,8 @@ class WormArenaGame {
           if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
 
           if (waitingRoomCodeVal) waitingRoomCodeVal.textContent = cleanCode;
-          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
-          if (waitingOwnerNotice) waitingOwnerNotice.textContent = 'Oda sahibi oyunu daha başlatmadı ama bekleme odasındasınız';
+          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibine bağlanılıyor...';
+          if (waitingOwnerNotice) waitingOwnerNotice.textContent = 'Oda sahibi aranıyor, lütfen bekleyin...';
 
           if (clientLobbyList) {
             clientLobbyList.innerHTML = `
@@ -4583,7 +4583,7 @@ class WormArenaGame {
               <li class="lobby-item">
                 <span class="lobby-player-icon">🟢</span>
                 <span class="lobby-player-name">${this.escapeHtml(myName)} (Sen)</span>
-                <span class="lobby-ready-badge">BAĞLANIYOR</span>
+                <span class="lobby-ready-badge" id="myLobbyBadge">BAĞLANIYOR</span>
               </li>
             `;
           }
