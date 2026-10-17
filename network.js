@@ -347,15 +347,20 @@ class NetworkManager {
       }
 
       // Odaya katılan oyuncuyu lobiye ekle ve güncel oyuncu listesini herkese yay
-      // EĞER OYUN HALİHAZIRDA OYNANIYORSA, YENİ GELEN OYUNCUYU DERHAL ARENAYA SOK!
+      // EĞER OYUN HALİHAZIRDA OYNANIYORSA, YENİ GELEN OYUNCUYU DERHAL ARENAYA GÜVENLİ SOK!
       if (this.game.state === 'PLAYING') {
         const skin = (typeof SKINS !== 'undefined' && SKINS.find(s => s.id === pInfo.skinId)) || SKINS[0];
-        const rx = Math.round(this.game.worldWidth / 2 + (Math.random() - 0.5) * 800);
-        const ry = Math.round(this.game.worldHeight / 2 + (Math.random() - 0.5) * 800);
+        const angle = Math.random() * Math.PI * 2;
+        const spawnRadius = 850;
+        const rx = Math.round(this.game.worldWidth / 2 + Math.cos(angle) * spawnRadius);
+        const ry = Math.round(this.game.worldHeight / 2 + Math.sin(angle) * spawnRadius);
+        const faceAngle = Number((angle + Math.PI / 2).toFixed(2));
         const worm = new Worm(rx, ry, pInfo.name, skin, false);
         worm.peerId = peerId;
         worm.hat = pInfo.hatId || 'none';
-        worm.ghostTimer = 150;
+        worm.angle = faceAngle;
+        worm.targetAngle = faceAngle;
+        worm.ghostTimer = 180;
         this.remotePlayers.set(peerId, worm);
 
         const conn = this.connections.get(peerId);
@@ -366,7 +371,7 @@ class NetworkManager {
             worldWidth: this.game.worldWidth,
             worldHeight: this.game.worldHeight,
             foodSeed: Number(this.roomCode) || 12345,
-            spawns: { [peerId]: { x: rx, y: ry, angle: 0 } },
+            spawns: { [peerId]: { x: rx, y: ry, angle: faceAngle } },
             players: this.getLobbyList()
           });
         }
@@ -430,13 +435,15 @@ class NetworkManager {
       this.game.initFoods(800);
     }
 
-    // Tüm oyuncular için merkez etrafında düzenli başlangıç noktaları oluştur
+    // Tüm oyuncular için merkez etrafında güvenli, geniş ve dairesel başlangıç noktaları oluştur
     const spawns = {};
+    const spawnRadius = Math.min(1100, 650 + count * 150);
     list.forEach((p, idx) => {
       const angle = (idx / count) * Math.PI * 2;
       const x = Math.round(centerX + Math.cos(angle) * spawnRadius);
       const y = Math.round(centerY + Math.sin(angle) * spawnRadius);
-      const faceAngle = Number((angle + Math.PI).toFixed(2));
+      // Kafa kafaya çarpışmayı önlemek için dairesel/teğet bakış açısı
+      const faceAngle = Number((angle + Math.PI / 2).toFixed(2));
       spawns[p.id] = { x, y, angle: faceAngle };
     });
 
@@ -450,7 +457,7 @@ class NetworkManager {
       worm.hat = p.hatId || 'none';
       worm.angle = sp.angle;
       worm.targetAngle = sp.angle;
-      worm.ghostTimer = 150; // Başlangıç koruması: ilk 2.5 saniye hasarsızlık
+      worm.ghostTimer = 180; // Başlangıç koruması: ilk 3 saniye tam hasarsızlık
       this.remotePlayers.set(peerId, worm);
     });
 
@@ -749,11 +756,16 @@ class NetworkManager {
       }
     } else if (data.type === 'GAME_TICK') {
       // Host'tan gelen anlık fizik karesi
-      // EĞER OYUN HENÜZ BAŞLATILMAMIŞSA (GAME_START paketi kaçtıysa), İSTEMCİYİ DERHAL ARENAYA SOK!
+      // EĞER OYUN HENÜZ BAŞLATILMAMIŞSA (lobideyken):
+      // SADECE ve SADECE host bu istemci için resmi bir solucan oluşturduysa arenaya gir!
       if (this.game.state !== 'PLAYING') {
-        console.log('GAME_TICK alındı, oyun lobi durumundaydı - Arenaya zorla sokuluyor!');
-        const myWormData = data.worms ? (data.worms.find(w => w.peerId === this.myPeerId) || data.worms.find(w => w.peerId !== 'host' && !w.isBot)) : null;
-        const mySp = myWormData ? { x: myWormData.x, y: myWormData.y, angle: myWormData.angle } : null;
+        const myWormData = data.worms ? data.worms.find(w => w.peerId === this.myPeerId) : null;
+        if (!myWormData) {
+          // Henüz oda sahibi oyunu başlatmadı, bekleme odasında kalmaya devam et
+          return;
+        }
+        console.log('GAME_TICK alındı, oyun lobi durumundaydı - Arenaya senkronize giriliyor!');
+        const mySp = { x: myWormData.x, y: myWormData.y, angle: myWormData.angle };
         this.game.startMultiplayerClientGame(mySp);
       }
 
@@ -839,6 +851,8 @@ class NetworkManager {
   // Host: Tüm bağlı istemcilere anlık oyun durumunu yayınlar (Throttled & Downsampled)
   broadcastState(worms, newFoods = [], eatenIndices = []) {
     if (!this.isHost || this.connections.size === 0) return;
+    // Oyun henüz başlatılmadıysa (lobideyken) kesinlikle istemcilere tick yayını gönderme!
+    if (this.game.state !== 'PLAYING' && this.game.state !== 'DYING' && this.game.state !== 'GAMEOVER') return;
 
     // Gövde segmentlerini ağ üzerinden aktarırken seyrelt (downsample):
     // Her karede 50 segment yerine ana omurgayı (18-22 segment) aktararak bant genişliğini %70 düşürür
@@ -872,6 +886,7 @@ class NetworkManager {
           kills: w.kills || 0,
           isBoosting: !!w.isBoosting,
           isDead: !!w.isDead,
+          killedBy: w.killedBy || null,
           body: downsampledBody
         };
       }),

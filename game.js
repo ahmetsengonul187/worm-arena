@@ -2074,6 +2074,12 @@ class WormArenaGame {
   }
 
   update() {
+    // Lobide veya menüdeyken fizik döngüsünü ve tick yayınını kesinlikle çalıştırma!
+    if (this.state !== 'PLAYING' && this.state !== 'DYING' && this.state !== 'GAMEOVER') {
+      return;
+    }
+    if (!this.player) return;
+
     // Ölüm & Yıldızlı Yemeğe Dönüşüm Gösteri Animasyonu (Kamera odaklı kalır, yıldızlar saçılır)
     if (this.state === 'DYING') {
       this.deathTimer--;
@@ -2102,8 +2108,6 @@ class WormArenaGame {
         return;
       }
     }
-
-    if ((this.state !== 'PLAYING' && (!this.network.isMultiplayer || !this.network.isHost)) || !this.player) return;
 
     // Canlı Etkinlik Kontrolü (Altın Yağmuru Her 80 sn)
     this.eventTimer++;
@@ -2165,7 +2169,7 @@ class WormArenaGame {
     }
 
     // ==================== CLIENT MODU ====================
-    // İstemcide akıcı yerel kontrol + Anlık Kafa-Gövde Çarpışma Hissi
+    // İstemcide akıcı yerel kontrol (Çarpışma kararı sunucu/host tarafından verilir)
     if (this.network.isMultiplayer && !this.network.isHost) {
       this.network.sendThrottledInput(
         this.player.targetAngle,
@@ -2184,39 +2188,6 @@ class WormArenaGame {
         return;
       }
 
-      // Anlık Kafa-Gövde Çarpışma Kontrolü (Diğer yılanların içinden geçmeyi %100 önler!)
-      if (!this.player.isDead && this.player.ghostTimer <= 0) {
-        for (const rw of this.network.remotePlayers.values()) {
-          if (rw.isDead || rw.ghostTimer > 0) continue;
-          const vPoints = [{ x: rw.x, y: rw.y }, ...rw.body];
-          for (let k = 1; k < vPoints.length; k++) {
-            const p1 = vPoints[k - 1];
-            const p2 = vPoints[k];
-            const segRadius = Math.max(10, rw.radius * 0.9);
-            const hitDist = this.player.radius * 0.9 + segRadius;
-            const segDx = p2.x - p1.x;
-            const segDy = p2.y - p1.y;
-            const segLenSq = segDx * segDx + segDy * segDy;
-            let t = segLenSq > 0 ? ((this.player.x - p1.x) * segDx + (this.player.y - p1.y) * segDy) / segLenSq : 0;
-            if (t < 0) t = 0;
-            else if (t > 1) t = 1;
-
-            const cx = p1.x + t * segDx;
-            const cy = p1.y + t * segDy;
-            const cdx = this.player.x - cx;
-            const cdy = this.player.y - cy;
-            if (cdx * cdx + cdy * cdy <= hitDist * hitDist) {
-              this.handlePlayerDeath(rw.name || 'Rakip Solucan');
-              return;
-            }
-          }
-        }
-      }
-
-      // DİKKAT: İstemcide rw.update(allWorms) ÇALIŞTIRILMAZ!
-      // Uzaktaki oyuncular ve botlar sadece sunucudan gelen GAME_TICK ile güncellenir.
-      // Bu sayede uzaktaki yılanlar ne iki kat hızlanır ne de titrer!
-
       this.camera.x += (this.player.x - window.innerWidth / 2 - this.camera.x) * 0.15;
       this.camera.y += (this.player.y - window.innerHeight / 2 - this.camera.y) * 0.15;
 
@@ -2232,7 +2203,10 @@ class WormArenaGame {
 
     // ==================== HOST VEYA TEK OYUNCU ====================
     const remotePlayersList = Array.from(this.network.remotePlayers.values());
-    const allWorms = (this.player && !this.player.isDead)
+    // Host ölse bile istemcilerin ekranında ve lider tablosunda kalması için allWorms içinde korunur
+    const allWorms = this.player
+      ? [this.player, ...this.bots, ...remotePlayersList]
+      : [...this.bots, ...remotePlayersList];
       ? [this.player, ...this.bots, ...remotePlayersList]
       : [...this.bots, ...remotePlayersList];
 
