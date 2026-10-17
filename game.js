@@ -1987,7 +1987,7 @@ class WormArenaGame {
   }
 
   // Host için çok oyunculu odayı başlatma
-  startMultiplayerHostGame(includeBots = true, spawnX = null, spawnY = null, spawnAngle = 0) {
+  startMultiplayerHostGame(includeBots = false, spawnX = null, spawnY = null, spawnAngle = 0) {
     let playerName = this.validatePlayerName(true);
     if (!playerName) {
       playerName = this.getPlayerName() || `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
@@ -4109,6 +4109,10 @@ class WormArenaGame {
         if (roomTabsBar) roomTabsBar.classList.remove('hidden');
         if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
 
+        // Odada botlar düğmesi varsayılan olarak her zaman kapalı olsun
+        const botsToggle = document.getElementById('botsInRoomToggle');
+        if (botsToggle) botsToggle.checked = false;
+
         // Sekmeyi Oda Kur olarak aç
         if (tabCreateRoom) tabCreateRoom.classList.add('active');
         if (tabJoinRoom) tabJoinRoom.classList.remove('active');
@@ -4287,7 +4291,7 @@ class WormArenaGame {
     // Oda kuran kişi 'ARENAYI BAŞLAT' dediğinde, odadaki tüm arkadaşları eş zamanlı başlatır
     if (startRoomGameBtn) {
       startRoomGameBtn.addEventListener('click', () => {
-        const includeBots = botsInRoomToggle ? botsInRoomToggle.checked : true;
+        const includeBots = botsInRoomToggle ? botsInRoomToggle.checked : false;
         this.network.startRoomGame(includeBots);
       });
     }

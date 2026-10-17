@@ -456,7 +456,7 @@ class NetworkManager {
   // ==================== 2. ODAYI BAŞLAT (HOST TETİKLER) ====================
   // Oda kuran kişi 'ARENAYI BAŞLAT' butonuna bastığında çağrılır.
   // Tüm odadaki oyuncular aynı saniyede oyuna başlar.
-  startRoomGame(includeBots = true) {
+  startRoomGame(includeBots = false) {
     if (!this.isHost) return;
 
     const list = this.getLobbyList();
