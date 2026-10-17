@@ -2625,25 +2625,50 @@ class WormArenaGame {
 
   dropFoodFromWorm(worm) {
     if (!worm) return;
-    // Her segmenti altın parıltılı yıldızlı yemeğe (⭐) dönüştür
-    const count = Math.max(worm.body.length, 30);
+    const bodyLen = (worm.body && Array.isArray(worm.body)) ? worm.body.length : 0;
+    // Yılanın boyuna ve puanına göre orantılı yıldızlı yemek miktarı
+    // Küçük yılanlar için 8-15 arası, büyük yılanlar için en fazla 40 adet
+    const count = Math.min(40, Math.max(8, Math.floor(bodyLen * 0.8)));
+
     for (let i = 0; i < count; i++) {
-      const idx = Math.min(worm.body.length - 1, Math.floor((i / count) * worm.body.length));
-      const seg = worm.body[idx] || { x: worm.x, y: worm.y };
-      const spreadX = seg.x + (Math.random() - 0.5) * 40;
-      const spreadY = seg.y + (Math.random() - 0.5) * 40;
-      this.spawnFood(spreadX, spreadY, 'star_coin');
+      let posX = worm.x;
+      let posY = worm.y;
+
+      if (bodyLen > 0) {
+        const segIdx = Math.min(bodyLen - 1, Math.floor((i / count) * bodyLen));
+        const seg = worm.body[segIdx];
+        if (seg && typeof seg.x === 'number' && typeof seg.y === 'number') {
+          // Segment etrafına doğal organik saçılma (Geniş açı ve aralıklı)
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.random() * 32 + 12;
+          posX = seg.x + Math.cos(angle) * dist;
+          posY = seg.y + Math.sin(angle) * dist;
+        } else {
+          const angle = (i / count) * Math.PI * 2;
+          const dist = 35 + (i % 3) * 25 + Math.random() * 20;
+          posX = worm.x + Math.cos(angle) * dist;
+          posY = worm.y + Math.sin(angle) * dist;
+        }
+      } else {
+        // Gövde henüz senkronize değilse tek noktaya yığılmasını önlemek için geniş halkalar halinde saç
+        const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+        const dist = 40 + (i % 4) * 35 + Math.random() * 20;
+        posX = worm.x + Math.cos(angle) * dist;
+        posY = worm.y + Math.sin(angle) * dist;
+      }
+
+      this.spawnFood(posX, posY, 'star_coin');
 
       // Parlak altın rengi yıldız patlama kıvılcımları
-      for (let p = 0; p < 4; p++) {
+      for (let p = 0; p < 2; p++) {
         this.particles.push({
-          x: spreadX,
-          y: spreadY,
-          vx: (Math.random() - 0.5) * 8,
-          vy: (Math.random() - 0.5) * 8,
+          x: posX,
+          y: posY,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 6,
           color: Math.random() < 0.6 ? '#ffd700' : '#ffea00',
           alpha: 1,
-          size: Math.random() * 4 + 3
+          size: Math.random() * 3 + 2
         });
       }
     }
@@ -2653,7 +2678,7 @@ class WormArenaGame {
   handlePlayerDeath(killedBy) {
     if (this.state === 'GAMEOVER' || this.state === 'DYING') return;
     this.state = 'DYING';
-    this.deathTimer = 110; // ~1.8 saniye boyunca yılanın yıldızlı yemeğe dönüşmesi kamerada canlı gösterilir!
+    this.deathTimer = 65; // ~1.1 saniye sonra Game Over penceresi kesin olarak açılır
 
     try {
       sounds.playDie();
@@ -2670,10 +2695,29 @@ class WormArenaGame {
 
       if (this.player) {
         this.player.isDead = true;
-        this.dropFoodFromWorm(this.player);
 
+        // Yiyecekleri SADECE host veya tek oyunculu modda spawn et!
+        // İstemcide host zaten yiyecekleri oluşturup ağ üzerinden GAME_TICK içinde aktarır
+        if (!this.network.isMultiplayer || this.network.isHost) {
+          this.dropFoodFromWorm(this.player);
+        } else {
+          // İstemci için anında yerel patlama partikülleri
+          for (let p = 0; p < 25; p++) {
+            this.particles.push({
+              x: this.player.x + (Math.random() - 0.5) * 50,
+              y: this.player.y + (Math.random() - 0.5) * 50,
+              vx: (Math.random() - 0.5) * 9,
+              vy: (Math.random() - 0.5) * 9,
+              color: Math.random() < 0.6 ? '#ffd700' : '#ffea00',
+              alpha: 1,
+              size: Math.random() * 4 + 2
+            });
+          }
+        }
+
+        const dropCount = Math.min(40, Math.max(8, Math.floor(((this.player.body && this.player.body.length) || 11) * 0.8)));
         if (window.showInGameAlert) {
-          window.showInGameAlert(`💥 ${killedBy ? killedBy + ' ile çarpıştın!' : 'Ezildin!'} Yılanın ${Math.max(this.player.body.length, 30)} adet Yıldızlı Yemeğe Dönüştü! ⭐`, 'warning', '⭐ YILDIZLI YEMEK DÖNÜŞÜMÜ');
+          window.showInGameAlert(`💥 ${killedBy ? killedBy + ' ile çarpıştın!' : 'Ezildin!'} Yılanın ${dropCount} adet Yıldızlı Yemeğe Dönüştü! ⭐`, 'warning', '⭐ YILDIZLI YEMEK DÖNÜŞÜMÜ');
         }
 
         const earnedCoins = Math.max(10, Math.floor(this.player.score / 20) + this.player.kills * 25);
@@ -2689,11 +2733,11 @@ class WormArenaGame {
         const finalKillsEl = document.getElementById('finalKillsVal');
         const finalRankEl = document.getElementById('finalRankVal');
 
-        if (killedByEl) killedByEl.textContent = `${killedBy} adlı solucana çarptın!`;
+        if (killedByEl) killedByEl.textContent = `${killedBy ? killedBy + ' adlı solucana' : 'Bir engele'} çarptın!`;
         if (earnedCoinsEl) earnedCoinsEl.textContent = earnedCoins;
         if (finalScoreEl) finalScoreEl.textContent = Math.floor(this.player.score);
         if (finalKillsEl) finalKillsEl.textContent = this.player.kills;
-        if (finalRankEl) finalRankEl.textContent = `#${this.bestRank}`;
+        if (finalRankEl) finalRankEl.textContent = `#${this.bestRank || 1}`;
       }
     } catch (err) {
       console.error('handlePlayerDeath error:', err);
@@ -3474,7 +3518,7 @@ class WormArenaGame {
     this.ctx.fillStyle = '#101424';
     this.ctx.fillRect(0, 0, w, h);
 
-    if ((this.state !== 'PLAYING' && this.state !== 'DYING') || !this.player) {
+    if ((this.state !== 'PLAYING' && this.state !== 'DYING' && this.state !== 'GAMEOVER') || !this.player) {
       this.drawArenaPattern(w, h);
       return;
     }
@@ -4374,12 +4418,15 @@ class WormArenaGame {
         const joinPlayerNameInput = document.getElementById('joinPlayerNameInput');
         let customName = joinPlayerNameInput ? joinPlayerNameInput.value.trim() : '';
 
-        // İsim girilmediyse kayıtlı veya otomatik isim oluştur
-        if (!customName || customName.length === 0) {
-          customName = this.getPlayerName();
-        }
-        if (!customName || customName.length === 0) {
-          customName = `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
+        // İsim zorunlu: Kullanıcı isim yazmadan odaya katılamaz!
+        if (!customName || customName.length < 2 || customName.startsWith('Oyuncu_')) {
+          joinStatusMsg.textContent = '⚠️ Lütfen oyuncu adınızı girin! İsimsiz odaya katılamazsınız.';
+          if (joinPlayerNameInput) {
+            joinPlayerNameInput.focus();
+            joinPlayerNameInput.classList.add('input-error-shake');
+            setTimeout(() => joinPlayerNameInput.classList.remove('input-error-shake'), 500);
+          }
+          return;
         }
         if (joinPlayerNameInput) joinPlayerNameInput.value = customName;
 
@@ -4732,6 +4779,16 @@ class WormArenaGame {
       });
     }
 
+    const gameOverReturnMenuBtn = document.getElementById('gameOverReturnMenuBtn');
+    if (gameOverReturnMenuBtn) {
+      gameOverReturnMenuBtn.addEventListener('click', () => {
+        if (this.network && this.network.isMultiplayer) {
+          this.network.disconnect();
+        }
+        this.returnToMenu();
+      });
+    }
+
     const gameOverHomeBtn = document.getElementById('gameOverHomeBtn');
     if (gameOverHomeBtn) {
       gameOverHomeBtn.addEventListener('click', () => {
@@ -4743,6 +4800,9 @@ class WormArenaGame {
     const closeGameOverBtn = document.getElementById('closeGameOverBtn');
     if (closeGameOverBtn) {
       closeGameOverBtn.addEventListener('click', () => {
+        if (this.network && this.network.isMultiplayer) {
+          this.network.disconnect();
+        }
         this.returnToMenu();
       });
     }
@@ -4864,89 +4924,155 @@ class WormArenaGame {
     return `${defaultPublicUrl}/?oda=${code}`;
   }
 
-  // Sayfa açıldığında URL parametresinde (?oda=8532) varsa doğrudan Bekleme Odasını Aç ve Bağlan
+  // Sayfa açıldığında URL parametresinde (?oda=8532) varsa ÖNCE kullanıcıdan ismini iste, sonra Bekleme Odasına Bağlan
   checkUrlRoomInvite() {
     try {
       const params = new URLSearchParams(window.location.search);
       const roomCode = params.get('oda') || params.get('room');
       if (roomCode && roomCode.trim().length > 0) {
         const cleanCode = roomCode.trim();
-        const tryAutoJoin = (attempts = 0) => {
-          if (typeof Peer === 'undefined' && attempts < 30) {
-            setTimeout(() => tryAutoJoin(attempts + 1), 200);
+
+        const inviteModal = document.getElementById('inviteNameModal');
+        const inviteBadge = document.getElementById('inviteModalRoomBadge');
+        const inviteInput = document.getElementById('invitePlayerNameInput');
+        const inviteError = document.getElementById('inviteNameErrorMsg');
+        const inviteSubmitBtn = document.getElementById('inviteJoinSubmitBtn');
+
+        if (inviteBadge) inviteBadge.textContent = `#${cleanCode}`;
+
+        // Kayıtlı geçerli bir isim varsa doldur, ama varsayılan Oyuncu_XXX ise boş bırak ki isim yazmaya zorlasın
+        let existingName = localStorage.getItem('worm_player_name') || '';
+        if (existingName.startsWith('Oyuncu_')) {
+          existingName = '';
+        }
+        if (inviteInput) {
+          inviteInput.value = existingName;
+        }
+
+        // Davet İsim Modalını Aç (Kullanıcıyı isim yazmaya zorla)
+        if (inviteModal) {
+          inviteModal.classList.remove('hidden');
+          inviteModal.style.display = 'flex';
+          setTimeout(() => {
+            if (inviteInput) inviteInput.focus();
+          }, 350);
+        }
+
+        const proceedToRoom = () => {
+          const typedName = inviteInput ? inviteInput.value.trim() : '';
+          if (!typedName || typedName.length < 2) {
+            if (inviteError) inviteError.textContent = '⚠️ Lütfen adınızı yazın! İsimsiz odaya katılamazsınız.';
+            if (inviteInput) {
+              inviteInput.focus();
+              inviteInput.classList.add('input-error-shake');
+              setTimeout(() => inviteInput.classList.remove('input-error-shake'), 500);
+            }
             return;
           }
 
-          let myName = localStorage.getItem('worm_player_name');
-          if (!myName || !myName.trim()) {
-            myName = `Oyuncu_${Math.floor(100 + Math.random() * 900)}`;
-            localStorage.setItem('worm_player_name', myName);
-          }
-          const nameInput = document.getElementById('playerNameInput');
-          if (nameInput) nameInput.value = myName;
-
+          // Geçerli isim yazıldı, kaydet
+          localStorage.setItem('worm_player_name', typedName);
+          const mainNameInput = document.getElementById('playerNameInput');
+          if (mainNameInput) mainNameInput.value = typedName;
           const joinPlayerNameInput = document.getElementById('joinPlayerNameInput');
-          if (joinPlayerNameInput) joinPlayerNameInput.value = myName;
+          if (joinPlayerNameInput) joinPlayerNameInput.value = typedName;
 
-          const multiplayerModal = document.getElementById('multiplayerModal');
-          const roomTabsBar = document.getElementById('roomTabsBar');
-          const createRoomContent = document.getElementById('createRoomTabContent');
-          const joinRoomContent = document.getElementById('joinRoomTabContent');
-          const waitingRoomContent = document.getElementById('waitingRoomTabContent');
-          const waitingRoomCodeVal = document.getElementById('waitingRoomCodeVal');
-          const waitingStatusText = document.getElementById('waitingStatusText');
-          const waitingOwnerNotice = document.getElementById('waitingOwnerNotice');
-          const clientLobbyList = document.getElementById('clientLobbyList');
-          const clientLobbyCount = document.getElementById('clientLobbyCount');
-          const joinRoomCodeInput = document.getElementById('joinRoomCodeInput');
-
-          if (joinRoomCodeInput) joinRoomCodeInput.value = cleanCode;
-
-          // Doğrudan bekleme odasını aç (kullanıcıyı sekme veya formla bekletmez!)
-          if (multiplayerModal) {
-            multiplayerModal.classList.remove('hidden');
-            multiplayerModal.style.display = 'flex';
-          }
-          if (roomTabsBar) roomTabsBar.classList.add('hidden');
-          if (createRoomContent) createRoomContent.classList.add('hidden');
-          if (joinRoomContent) joinRoomContent.classList.add('hidden');
-          if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
-
-          if (waitingRoomCodeVal) waitingRoomCodeVal.textContent = cleanCode;
-          if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibine bağlanılıyor...';
-          if (waitingOwnerNotice) waitingOwnerNotice.textContent = 'Oda sahibi aranıyor, lütfen bekleyin...';
-
-          if (clientLobbyList) {
-            clientLobbyList.innerHTML = `
-              <li class="lobby-item is-host">
-                <span class="lobby-player-icon">👑</span>
-                <span class="lobby-player-name">Oda Sahibi</span>
-                <span class="lobby-ready-badge leader">LİDER</span>
-              </li>
-              <li class="lobby-item">
-                <span class="lobby-player-icon">🟢</span>
-                <span class="lobby-player-name">${this.escapeHtml(myName)} (Sen)</span>
-                <span class="lobby-ready-badge" id="myLobbyBadge">BAĞLANIYOR</span>
-              </li>
-            `;
-          }
-          if (clientLobbyCount) clientLobbyCount.textContent = '2';
-
-          if (window.showInGameAlert) {
-            window.showInGameAlert(`${cleanCode} numaralı odaya bağlanılıyor...`, 'info', '🎮 ODAYA KATIL');
+          if (inviteModal) {
+            inviteModal.classList.add('hidden');
+            inviteModal.style.display = 'none';
           }
 
-          if (this.network.isHost) {
-            this.network.disconnect();
-          }
-
-          this.startClientJoin(cleanCode).catch(() => {});
+          // Şimdi odaya katılma ve bekleme odası ekranını göster
+          this.connectToInviteRoom(cleanCode, typedName);
         };
-        setTimeout(() => tryAutoJoin(0), 300);
+
+        if (inviteSubmitBtn) {
+          inviteSubmitBtn.onclick = (e) => {
+            e.preventDefault();
+            proceedToRoom();
+          };
+        }
+
+        if (inviteInput) {
+          inviteInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              proceedToRoom();
+            }
+          };
+          inviteInput.oninput = () => {
+            if (inviteError) inviteError.textContent = '';
+          };
+        }
       }
     } catch (e) {
       console.warn('URL room invite check failed:', e);
     }
+  }
+
+  // İsim girildikten sonra bekleme odasını açıp odaya bağlanma
+  connectToInviteRoom(cleanCode, playerName) {
+    const tryJoin = (attempts = 0) => {
+      if (typeof Peer === 'undefined' && attempts < 30) {
+        setTimeout(() => tryJoin(attempts + 1), 200);
+        return;
+      }
+
+      const multiplayerModal = document.getElementById('multiplayerModal');
+      const roomTabsBar = document.getElementById('roomTabsBar');
+      const createRoomContent = document.getElementById('createRoomTabContent');
+      const joinRoomContent = document.getElementById('joinRoomTabContent');
+      const waitingRoomContent = document.getElementById('waitingRoomTabContent');
+      const waitingRoomCodeVal = document.getElementById('waitingRoomCodeVal');
+      const waitingStatusText = document.getElementById('waitingStatusText');
+      const waitingOwnerNotice = document.getElementById('waitingOwnerNotice');
+      const clientLobbyList = document.getElementById('clientLobbyList');
+      const clientLobbyCount = document.getElementById('clientLobbyCount');
+      const joinRoomCodeInput = document.getElementById('joinRoomCodeInput');
+
+      if (joinRoomCodeInput) joinRoomCodeInput.value = cleanCode;
+
+      // Bekleme odasını aç
+      if (multiplayerModal) {
+        multiplayerModal.classList.remove('hidden');
+        multiplayerModal.style.display = 'flex';
+      }
+      if (roomTabsBar) roomTabsBar.classList.add('hidden');
+      if (createRoomContent) createRoomContent.classList.add('hidden');
+      if (joinRoomContent) joinRoomContent.classList.add('hidden');
+      if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
+
+      if (waitingRoomCodeVal) waitingRoomCodeVal.textContent = cleanCode;
+      if (waitingStatusText) waitingStatusText.textContent = 'Oda sahibine bağlanılıyor...';
+      if (waitingOwnerNotice) waitingOwnerNotice.textContent = 'Oda sahibi aranıyor, lütfen bekleyin...';
+
+      if (clientLobbyList) {
+        clientLobbyList.innerHTML = `
+          <li class="lobby-item is-host">
+            <span class="lobby-player-icon">👑</span>
+            <span class="lobby-player-name">Oda Sahibi</span>
+            <span class="lobby-ready-badge leader">LİDER</span>
+          </li>
+          <li class="lobby-item">
+            <span class="lobby-player-icon">🟢</span>
+            <span class="lobby-player-name">${this.escapeHtml(playerName)} (Sen)</span>
+            <span class="lobby-ready-badge" id="myLobbyBadge">BAĞLANIYOR</span>
+          </li>
+        `;
+      }
+      if (clientLobbyCount) clientLobbyCount.textContent = '2';
+
+      if (window.showInGameAlert) {
+        window.showInGameAlert(`${cleanCode} numaralı odaya bağlanılıyor...`, 'info', '🎮 ODAYA KATIL');
+      }
+
+      if (this.network.isHost) {
+        this.network.disconnect();
+      }
+
+      this.startClientJoin(cleanCode).catch(() => {});
+    };
+    tryJoin(0);
   }
 
   startLoop() {

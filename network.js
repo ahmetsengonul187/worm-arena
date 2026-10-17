@@ -439,32 +439,35 @@ class NetworkManager {
       }
     } else if (data.type === 'PLAYER_RESPAWN') {
       // Ölen istemci tekrar canlanmak istediğinde
-      const pInfo = this.lobbyPlayers.get(peerId);
-      if (pInfo) {
-        const skin = (typeof SKINS !== 'undefined' && SKINS.find(s => s.id === pInfo.skinId)) || SKINS[0];
-        const rx = Math.round(this.game.worldWidth / 2 + (Math.random() - 0.5) * 800);
-        const ry = Math.round(this.game.worldHeight / 2 + (Math.random() - 0.5) * 800);
-        const worm = new Worm(rx, ry, pInfo.name, skin, false);
-        worm.peerId = peerId;
-        worm.hat = pInfo.hatId;
-        worm.ghostTimer = 180;
-        this.remotePlayers.set(peerId, worm);
+      let pInfo = this.lobbyPlayers.get(peerId);
+      const existingWorm = this.remotePlayers.get(peerId);
+      const playerName = (pInfo && pInfo.name) || (existingWorm && existingWorm.name) || 'Oyuncu';
+      const skinId = (pInfo && pInfo.skinId) || (existingWorm && existingWorm.skin && existingWorm.skin.id) || 'white_king';
+      const hatId = (pInfo && pInfo.hatId) || (existingWorm && existingWorm.hat) || 'none';
+      const skin = (typeof SKINS !== 'undefined' && SKINS.find(s => s.id === skinId)) || SKINS[0];
 
-        if (this.game && this.game.updateLeaderboard) {
-          const allWorms = this.game.player
-            ? [this.game.player, ...this.game.bots, ...this.remotePlayers.values()]
-            : [...this.game.bots, ...this.remotePlayers.values()];
-          this.game.updateLeaderboard(allWorms);
-        }
+      const rx = Math.round(this.game.worldWidth / 2 + (Math.random() - 0.5) * 800);
+      const ry = Math.round(this.game.worldHeight / 2 + (Math.random() - 0.5) * 800);
+      const worm = new Worm(rx, ry, playerName, skin, false);
+      worm.peerId = peerId;
+      worm.hat = hatId;
+      worm.ghostTimer = 180;
+      this.remotePlayers.set(peerId, worm);
 
-        const conn = this.connections.get(peerId);
-        if (this.isConnReady(conn)) {
-          conn.send({
-            type: 'RESPAWN_ACK',
-            x: rx,
-            y: ry
-          });
-        }
+      if (this.game && this.game.updateLeaderboard) {
+        const allWorms = this.game.player
+          ? [this.game.player, ...this.game.bots, ...this.remotePlayers.values()]
+          : [...this.game.bots, ...this.remotePlayers.values()];
+        this.game.updateLeaderboard(allWorms);
+      }
+
+      const conn = this.connections.get(peerId);
+      if (this.isConnReady(conn)) {
+        conn.send({
+          type: 'RESPAWN_ACK',
+          x: rx,
+          y: ry
+        });
       }
     }
   }
@@ -715,15 +718,15 @@ class NetworkManager {
     if (!data || !data.type) return;
 
     if (data.type === 'LOBBY_STATE') {
-      // Host'tan gelen güncel lobi oyuncu listesi (oyun oynanıyorsa lobiyi tekrar açma)
-      if (this.game.state !== 'PLAYING') {
+      // Host'tan gelen güncel lobi oyuncu listesi (sadece lobideyken)
+      if (this.game.state === 'START') {
         if (this.onLobbyUpdated) {
           this.onLobbyUpdated(data.players || [], data.roomCode);
         }
       }
     } else if (data.type === 'GAME_START') {
-      if (this.game.state === 'PLAYING') {
-        return; // Zaten arenadayız, mükerrer teyit paketlerini yoksay
+      if (this.game.state !== 'START') {
+        return; // Zaten oyun başladıysa veya ölü/bitiş durumundaysa mükerrer teyit paketlerini yoksay
       }
 
       console.log('GAME_START paketi alındı! Arenaya giriliyor...');
@@ -796,25 +799,36 @@ class NetworkManager {
       }
     } else if (data.type === 'RESPAWN_ACK') {
       // Tekrar canlanma onayı
-      if (this.game.player) {
+      if (!this.game.player) {
+        const skin = (typeof SKINS !== 'undefined' && SKINS[this.game.selectedSkinIndex]) || SKINS[0];
+        this.game.player = new Worm(data.x, data.y, this.game.getPlayerName(), skin, false);
+        this.game.player.peerId = this.myPeerId;
+      } else {
         this.game.player.x = data.x;
         this.game.player.y = data.y;
         this.game.player.isDead = false;
-        this.game.player.ghostTimer = 150;
-        this.game.player.body = [{ x: data.x, y: data.y }, { x: data.x - 10, y: data.y }];
-        this.game.player.score = 30;
-        this.game.gameOverScreen.classList.add('hidden');
-        if (this.game.joystickZone) this.game.joystickZone.classList.remove('hidden');
-        this.game.state = 'PLAYING';
+        this.game.player.ghostTimer = 180;
+        this.game.player.radius = 11;
+        this.game.player.score = 15;
+        this.game.player.body = [];
+        for (let i = 0; i < 11; i++) {
+          this.game.player.body.push({ x: data.x - i * 6.0, y: data.y });
+        }
       }
+      if (this.game.gameOverScreen) {
+        this.game.gameOverScreen.classList.add('hidden');
+        this.game.gameOverScreen.style.display = 'none';
+      }
+      if (this.game.joystickZone) this.game.joystickZone.classList.remove('hidden');
+      this.game.state = 'PLAYING';
     } else if (data.type === 'GAME_TICK') {
       // Host'tan gelen anlık fizik karesi
-      // EĞER OYUN HENÜZ BAŞLATILMAMIŞSA (lobideyken):
-      // SADECE ve SADECE host bu istemci için resmi bir solucan oluşturduysa arenaya gir!
-      if (this.game.state !== 'PLAYING') {
-        const myWormData = data.worms ? data.worms.find(w => w.peerId === this.myPeerId) : null;
+      // EĞER OYUN HENÜZ BAŞLATILMAMIŞSA (sadece ve sadece lobi/menü durumundayken):
+      // SADECE host bu istemci için resmi ve canlı bir solucan oluşturduysa arenaya gir!
+      if (this.game.state === 'START') {
+        const myWormData = data.worms ? data.worms.find(w => w.peerId === this.myPeerId && !w.isDead) : null;
         if (!myWormData) {
-          // Henüz oda sahibi oyunu başlatmadı, bekleme odasında kalmaya devam et
+          // Henüz oda sahibi oyunu başlatmadı veya canlı solucan tanımlanmadı, bekleme odasında kalmaya devam et
           return;
         }
         console.log('GAME_TICK alındı, oyun lobi durumundaydı - Arenaya senkronize giriliyor!');

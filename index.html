@@ -365,6 +365,34 @@
       </div>
     </div>
 
+    <!-- ==================== 📩 ODA DAVETİ: ZORUNLU İSİM GİRME MODALI ==================== -->
+    <div class="modal-backdrop hidden" id="inviteNameModal">
+      <div class="modal-dialog invite-name-dialog" style="max-width: 440px; text-align: center;">
+        <div class="modal-header" style="justify-content: center;">
+          <h2 class="modal-title">🎮 ODAYA DAVET EDİLDİN</h2>
+        </div>
+
+        <div style="margin: 14px 0 10px;">
+          <div style="font-size: 0.9rem; color: #8899aa; margin-bottom: 6px; font-weight: 600;">Katılacağın Oda Kodu:</div>
+          <div class="invite-room-code-badge" id="inviteModalRoomBadge" style="display: inline-block; font-size: 1.8rem; font-weight: 800; color: #00ffcc; letter-spacing: 4px; background: rgba(0,255,204,0.12); border: 1.5px solid rgba(0,255,204,0.4); padding: 6px 24px; border-radius: 14px; text-shadow: 0 0 12px rgba(0,255,204,0.5);">----</div>
+        </div>
+
+        <p style="color: #cbd5e1; font-size: 0.96rem; margin-bottom: 16px; line-height: 1.4;">
+          Arkadaşlarının seni oyunda ve lobide görebilmesi için <strong>lütfen adını gir</strong>:
+        </p>
+
+        <div style="margin-bottom: 16px; text-align: left;">
+          <label for="invitePlayerNameInput" style="display: block; font-size: 0.85rem; color: #00ffcc; font-weight: 700; margin-bottom: 6px;">👤 OYUNCU ADIN (Zorunlu):</label>
+          <input type="text" id="invitePlayerNameInput" maxlength="14" placeholder="Adını buraya yaz..." autocomplete="off" style="width: 100%; box-sizing: border-box; padding: 14px 16px; font-size: 1.15rem; font-weight: 700; color: #ffffff; background: rgba(10, 18, 32, 0.95); border: 2px solid #00ffcc; border-radius: 12px; outline: none; transition: all 0.2s ease; box-shadow: 0 0 15px rgba(0,255,204,0.18);">
+          <p id="inviteNameErrorMsg" style="color: #ff4757; font-size: 0.88rem; font-weight: 600; margin-top: 6px; min-height: 20px;"></p>
+        </div>
+
+        <button class="play-btn-large glow-pulse" id="inviteJoinSubmitBtn" style="width: 100%;">
+          <span>ODAYA KATIL 🚀</span>
+        </button>
+      </div>
+    </div>
+
     <!-- ==================== 🎡 ŞANS ÇARKI PENCERESİ ==================== -->
     <div class="modal-backdrop hidden" id="wheelModal">
       <div class="modal-dialog">
@@ -604,9 +632,12 @@
           </div>
         </div>
 
-        <div class="gameover-buttons-row">
-          <button class="play-btn-large glow-pulse" id="respawnBtn">
-            <span>TEKRAR OYNA ↺</span>
+        <div class="gameover-buttons-row" style="display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 14px;">
+          <button class="play-btn-large glow-pulse" id="respawnBtn" style="width: 100%;">
+            <span>🔄 TEKRAR GİR / CANLAN</span>
+          </button>
+          <button class="room-btn-danger" id="gameOverReturnMenuBtn" style="width: 100%; padding: 12px; font-size: 1rem;">
+            <span>🚪 Lobiye / Ana Menüye Dön</span>
           </button>
         </div>
       </div>
