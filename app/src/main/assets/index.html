@@ -154,10 +154,6 @@
               <span class="coin-icon">🪙</span>
               <span class="coin-count" id="menuCoinCount">0</span>
             </div>
-            <div class="currency-pill diamond-pill" id="menuDiamondPill" title="Elmasların">
-              <span class="coin-icon">💎</span>
-              <span class="coin-count" id="menuDiamondCount">25</span>
-            </div>
             <div class="level-pill">
               <span class="star-icon">⭐</span>
               <span class="level-text">Lv.<b id="menuLevelText">1</b></span>
@@ -611,6 +607,48 @@
         <div class="gameover-buttons-row">
           <button class="play-btn-large glow-pulse" id="respawnBtn">
             <span>TEKRAR OYNA ↺</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 📱 SOSYAL MEDYA ALTTAN AÇILAN PAYLAŞIM ÇEKMECESİ ==================== -->
+    <div class="share-sheet-backdrop hidden" id="shareSheetBackdrop">
+      <div class="share-sheet-panel" id="shareSheetPanel">
+        <div class="share-sheet-drag-handle"></div>
+        <div class="share-sheet-header">
+          <div class="share-sheet-title-box">
+            <span class="share-sheet-icon">🚀</span>
+            <h3 class="share-sheet-title">Odayı Arkadaşlarınla Paylaş</h3>
+          </div>
+          <button class="share-sheet-close-btn" id="closeShareSheetBtn">✕</button>
+        </div>
+        <p class="share-sheet-desc">Aşağıdaki uygulamalardan birini seçerek arkadaşına anında katılma linki gönder:</p>
+
+        <div class="social-share-grid">
+          <button class="social-btn whatsapp-btn" id="shareWhatsAppBtn">
+            <span class="social-btn-icon">💬</span>
+            <span class="social-btn-label">WhatsApp</span>
+          </button>
+          <button class="social-btn telegram-btn" id="shareTelegramBtn">
+            <span class="social-btn-icon">✈️</span>
+            <span class="social-btn-label">Telegram</span>
+          </button>
+          <button class="social-btn twitter-btn" id="shareTwitterBtn">
+            <span class="social-btn-icon">✖️</span>
+            <span class="social-btn-label">X (Twitter)</span>
+          </button>
+          <button class="social-btn facebook-btn" id="shareFacebookBtn">
+            <span class="social-btn-icon">📘</span>
+            <span class="social-btn-label">Facebook</span>
+          </button>
+          <button class="social-btn copy-btn" id="shareSheetCopyBtn">
+            <span class="social-btn-icon">📋</span>
+            <span class="social-btn-label">Linki Kopyala</span>
+          </button>
+          <button class="social-btn more-btn" id="shareSheetMoreBtn">
+            <span class="social-btn-icon">📲</span>
+            <span class="social-btn-label">Diğer Uygulama</span>
           </button>
         </div>
       </div>

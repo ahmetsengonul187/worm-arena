@@ -825,9 +825,9 @@ class Worm {
     this.speed = this.baseSpeed;
     this.isBoosting = false;
 
-    this.radius = 16;
-    this.spacing = 8.0;
-    this.score = 30;
+    this.radius = 11;
+    this.spacing = 7.5;
+    this.score = 15;
     this.kills = 0;
     this.isDead = false;
 
@@ -839,9 +839,9 @@ class Worm {
     // Canlı İfade (Emote Bubble)
     this.currentEmote = null;
 
-    // Gövde segmentleri
+    // Gövde segmentleri (Başlangıç boyutu eskisine göre yarıya indirildi: 11 segment)
     this.body = [];
-    const initialSegments = 22;
+    const initialSegments = 11;
     for (let i = 0; i < initialSegments; i++) {
       this.body.push({
         x: this.x - Math.cos(this.angle) * (i * this.spacing),
@@ -880,9 +880,9 @@ class Worm {
       this.isBoosting = false;
     }
 
-    // Hız ve Boyut Hesaplama (Puan azaldıkça yılan dinamik olarak incelir ve kısalır)
-    this.radius = Math.min(28, 14 + Math.floor(this.score / 220));
-    this.targetLength = Math.max(16, 20 + Math.floor(this.score / 15));
+    // Hız ve Boyut Hesaplama (Başlangıçta minyon, puan topladıkça devasa ejdere dönüşür)
+    this.radius = Math.min(28, 11 + Math.floor(this.score / 180));
+    this.targetLength = Math.max(8, 11 + Math.floor(this.score / 15));
 
     // Bot Yapay Zeka Mantığı
     if (this.isBot) {
@@ -4099,23 +4099,162 @@ class WormArenaGame {
       });
     }
 
-    // Arkadaşlarla Oyna butonuna basıldığında
+    // Sosyal Medya Paylaşım Çekmecesi Elementleri
+    const shareSheetBackdrop = document.getElementById('shareSheetBackdrop');
+    const closeShareSheetBtn = document.getElementById('closeShareSheetBtn');
+    const shareWhatsAppBtn = document.getElementById('shareWhatsAppBtn');
+    const shareTelegramBtn = document.getElementById('shareTelegramBtn');
+    const shareTwitterBtn = document.getElementById('shareTwitterBtn');
+    const shareFacebookBtn = document.getElementById('shareFacebookBtn');
+    const shareSheetCopyBtn = document.getElementById('shareSheetCopyBtn');
+    const shareSheetMoreBtn = document.getElementById('shareSheetMoreBtn');
+
+    const openShareSheet = () => {
+      const roomCode = this.network.roomCode;
+      if (!roomCode) {
+        window.showInGameAlert('Oda kodu hazırlanıyor, lütfen bekleyin...', 'warning');
+        return;
+      }
+      if (shareSheetBackdrop) {
+        shareSheetBackdrop.classList.remove('hidden');
+        shareSheetBackdrop.style.display = 'flex';
+      }
+    };
+
+    const closeShareSheet = () => {
+      if (shareSheetBackdrop) {
+        shareSheetBackdrop.classList.add('hidden');
+        shareSheetBackdrop.style.display = 'none';
+      }
+    };
+
+    if (closeShareSheetBtn) closeShareSheetBtn.addEventListener('click', closeShareSheet);
+    if (shareSheetBackdrop) {
+      shareSheetBackdrop.addEventListener('click', (e) => {
+        if (e.target === shareSheetBackdrop) closeShareSheet();
+      });
+    }
+
+    // WhatsApp Paylaş
+    if (shareWhatsAppBtn) {
+      shareWhatsAppBtn.addEventListener('click', () => {
+        const roomCode = this.network.roomCode;
+        const inviteUrl = this.getInviteLink(roomCode);
+        const text = encodeURIComponent(`🎮 Worm Arena odama davetlisin! Tek tıkla savaşa katıl (Oda Kodu: ${roomCode}):\n${inviteUrl}`);
+        window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+        closeShareSheet();
+      });
+    }
+
+    // Telegram Paylaş
+    if (shareTelegramBtn) {
+      shareTelegramBtn.addEventListener('click', () => {
+        const roomCode = this.network.roomCode;
+        const inviteUrl = this.getInviteLink(roomCode);
+        const text = encodeURIComponent(`🎮 Worm Arena odama katıl ve benimle savaş! (Oda Kodu: ${roomCode})`);
+        window.open(`https://t.me/share/url?url=${encodeURIComponent(inviteUrl)}&text=${text}`, '_blank');
+        closeShareSheet();
+      });
+    }
+
+    // Twitter (X) Paylaş
+    if (shareTwitterBtn) {
+      shareTwitterBtn.addEventListener('click', () => {
+        const roomCode = this.network.roomCode;
+        const inviteUrl = this.getInviteLink(roomCode);
+        const text = encodeURIComponent(`🎮 Worm Arena'da arenaya bekleniyorsun! (Oda Kodu: ${roomCode})`);
+        window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(inviteUrl)}`, '_blank');
+        closeShareSheet();
+      });
+    }
+
+    // Facebook Paylaş
+    if (shareFacebookBtn) {
+      shareFacebookBtn.addEventListener('click', () => {
+        const roomCode = this.network.roomCode;
+        const inviteUrl = this.getInviteLink(roomCode);
+        window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(inviteUrl)}`, '_blank');
+        closeShareSheet();
+      });
+    }
+
+    // Çekmece İçi Link Kopyala
+    if (shareSheetCopyBtn) {
+      shareSheetCopyBtn.addEventListener('click', () => {
+        const roomCode = this.network.roomCode;
+        const inviteUrl = this.getInviteLink(roomCode);
+        const onCopied = () => {
+          const lbl = shareSheetCopyBtn.querySelector('.social-btn-label');
+          if (lbl) lbl.textContent = '✓ Kopyalandı!';
+          setTimeout(() => {
+            if (lbl) lbl.textContent = 'Linki Kopyala';
+          }, 2000);
+          window.showInGameAlert('Oda linki panoya kopyalandı!', 'success', '🔗 LİNK KOPYALANDI');
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(inviteUrl).then(onCopied).catch(onCopied);
+        } else {
+          onCopied();
+        }
+      });
+    }
+
+    // Diğer Uygulamalar (Native Share API)
+    if (shareSheetMoreBtn) {
+      shareSheetMoreBtn.addEventListener('click', async () => {
+        const roomCode = this.network.roomCode;
+        const inviteUrl = this.getInviteLink(roomCode);
+        if (navigator.share) {
+          try {
+            await navigator.share({
+              title: 'Worm Arena - Yılan Savaşı',
+              text: `Worm Arena odama davetlisin! Oda Kodu: ${roomCode}`,
+              url: inviteUrl
+            });
+            closeShareSheet();
+            return;
+          } catch (e) {}
+        }
+        // Fallback
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(inviteUrl);
+        }
+        window.showInGameAlert('Oda linki kopyalandı!', 'success');
+        closeShareSheet();
+      });
+    }
+
+    // Arkadaşlarla Oyna butonuna basıldığında (HER ZAMAN KESİNLİKLE ODA KUR SEKMESİ İLE AÇILIR)
     if (openFriendsRoomBtn && multiplayerModal) {
       openFriendsRoomBtn.addEventListener('click', () => {
         multiplayerModal.classList.remove('hidden');
         multiplayerModal.style.display = 'flex';
-        if (roomTabsBar) roomTabsBar.classList.remove('hidden');
-        if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
+        if (roomTabsBar) {
+          roomTabsBar.classList.remove('hidden');
+          roomTabsBar.style.display = 'grid';
+        }
+
+        // Sekmeleri sıfırla: KESİNLİKLE ODA KUR AÇILIR, ODAYA KATIL ASLA İLK AÇILMAZ!
+        if (tabCreateRoom) tabCreateRoom.classList.add('active');
+        if (tabJoinRoom) tabJoinRoom.classList.remove('active');
+
+        if (createRoomContent) {
+          createRoomContent.classList.remove('hidden');
+          createRoomContent.style.display = 'block';
+        }
+        if (joinRoomContent) {
+          joinRoomContent.classList.add('hidden');
+          joinRoomContent.style.display = 'none';
+        }
+        if (waitingRoomContent) {
+          waitingRoomContent.classList.add('hidden');
+          waitingRoomContent.style.display = 'none';
+        }
 
         // Odada botlar düğmesi varsayılan olarak her zaman kapalı olsun
         const botsToggle = document.getElementById('botsInRoomToggle');
         if (botsToggle) botsToggle.checked = false;
-
-        // Sekmeyi Oda Kur olarak aç
-        if (tabCreateRoom) tabCreateRoom.classList.add('active');
-        if (tabJoinRoom) tabJoinRoom.classList.remove('active');
-        if (createRoomContent) createRoomContent.classList.remove('hidden');
-        if (joinRoomContent) joinRoomContent.classList.add('hidden');
 
         const roomLinkInput = document.getElementById('roomLinkInput');
         const myName = this.getPlayerName();
@@ -4166,6 +4305,7 @@ class WormArenaGame {
       closeMultiplayerBtn.addEventListener('click', () => {
         multiplayerModal.classList.add('hidden');
         multiplayerModal.style.display = 'none';
+        closeShareSheet();
         if (this.network.isMultiplayer && !this.network.isHost && this.state !== 'PLAYING') {
           this.network.disconnect();
         }
@@ -4178,6 +4318,7 @@ class WormArenaGame {
         if (e.target === multiplayerModal) {
           multiplayerModal.classList.add('hidden');
           multiplayerModal.style.display = 'none';
+          closeShareSheet();
           if (this.network.isMultiplayer && !this.network.isHost && this.state !== 'PLAYING') {
             this.network.disconnect();
           }
@@ -4197,55 +4338,9 @@ class WormArenaGame {
       });
     }
 
-    // 2. Web Katılım Linkini Paylaş (Doğrudan Paylaşım Menüsü veya Panoya Kopyalama)
+    // 2. Web Katılım Linkini Paylaş (Alttan Açılan Şık Sosyal Medya Çekmecesi)
     if (copyRoomLinkBtn) {
-      copyRoomLinkBtn.addEventListener('click', async () => {
-        const roomCode = this.network.roomCode;
-        if (!roomCode) {
-          window.showInGameAlert('Oda kodu hazırlanıyor, lütfen bekleyin...', 'warning');
-          return;
-        }
-        const inviteUrl = this.getInviteLink(roomCode);
-        const shareData = {
-          title: 'Worm Arena - Yılan Savaşı',
-          text: `Worm Arena odama davetlisin! Tek tıkla tarayıcıdan savaşa katıl (Oda Kodu: ${roomCode}):\n`,
-          url: inviteUrl
-        };
-
-        if (navigator.share) {
-          try {
-            await navigator.share(shareData);
-            return;
-          } catch (err) {
-            if (err && err.name === 'AbortError') return;
-          }
-        }
-
-        // Fallback: Panoya kopyala
-        const copyFallback = () => {
-          copyRoomLinkBtn.textContent = '✓ Kopyalandı!';
-          setTimeout(() => { copyRoomLinkBtn.textContent = '📤 Paylaş'; }, 2000);
-          window.showInGameAlert('Oda linki kopyalandı! Arkadaşına yapıştırıp gönderebilirsin.', 'success', '🔗 LİNK KOPYALANDI');
-        };
-
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(inviteUrl).then(copyFallback).catch(() => {
-            const roomLinkInput = document.getElementById('roomLinkInput');
-            if (roomLinkInput) {
-              roomLinkInput.select();
-              document.execCommand('copy');
-              copyFallback();
-            }
-          });
-        } else {
-          const roomLinkInput = document.getElementById('roomLinkInput');
-          if (roomLinkInput) {
-            roomLinkInput.select();
-            document.execCommand('copy');
-            copyFallback();
-          }
-        }
-      });
+      copyRoomLinkBtn.addEventListener('click', openShareSheet);
     }
 
     // Sekme Geçişleri (Oda Kur / Odaya Katıl)
@@ -4254,8 +4349,13 @@ class WormArenaGame {
         tabCreateRoom.classList.add('active');
         tabJoinRoom.classList.remove('active');
         createRoomContent.classList.remove('hidden');
+        createRoomContent.style.display = 'block';
         joinRoomContent.classList.add('hidden');
-        if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
+        joinRoomContent.style.display = 'none';
+        if (waitingRoomContent) {
+          waitingRoomContent.classList.add('hidden');
+          waitingRoomContent.style.display = 'none';
+        }
 
         const roomCode = this.network.roomCode || this.network.generateRoomCode();
         this.network.roomCode = roomCode;
@@ -4290,8 +4390,13 @@ class WormArenaGame {
         tabJoinRoom.classList.add('active');
         tabCreateRoom.classList.remove('active');
         joinRoomContent.classList.remove('hidden');
+        joinRoomContent.style.display = 'block';
         createRoomContent.classList.add('hidden');
-        if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
+        createRoomContent.style.display = 'none';
+        if (waitingRoomContent) {
+          waitingRoomContent.classList.add('hidden');
+          waitingRoomContent.style.display = 'none';
+        }
 
         // Önceki oda sahibi oturumunu kapat ki temiz bir istemci olarak odaya katılabilsin
         if (this.network.isHost) {
