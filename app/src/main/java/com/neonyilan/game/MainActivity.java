@@ -1,11 +1,13 @@
 package com.neonyilan.game;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -146,6 +148,9 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
 
+            // Telefonun kendi yerel sistem paylaşım arayüzünü (Bottom Sheet) bağla
+            webView.addJavascriptInterface(new WebAppInterface(this), "AndroidApp");
+
             // Dahili assets klasöründen index.html'i yükle
             webView.loadUrl("file:///android_asset/index.html");
         }
@@ -212,6 +217,32 @@ public class MainActivity extends AppCompatActivity {
             webView.goBack();
         } else {
             super.onBackPressed();
+        }
+    }
+
+    // JavaScript'ten çağrılabilen Yerel Android Sistem Paylaşım Arayüzü (Native Share Sheet)
+    public static class WebAppInterface {
+        private final Context mContext;
+
+        public WebAppInterface(Context c) {
+            mContext = c;
+        }
+
+        @JavascriptInterface
+        public void shareRoomLink(String roomCode, String url) {
+            try {
+                Intent sendIntent = new Intent();
+                sendIntent.setAction(Intent.ACTION_SEND);
+                sendIntent.putExtra(Intent.EXTRA_SUBJECT, "Worm Arena - Yılan Savaşı Daveti");
+                sendIntent.putExtra(Intent.EXTRA_TEXT, "🎮 Worm Arena odama davetlisin!\nOda Kodu: " + roomCode + "\nTek tıkla savaşa katıl 👇\n" + url);
+                sendIntent.setType("text/plain");
+
+                Intent shareIntent = Intent.createChooser(sendIntent, "Odayı Arkadaşlarınla Paylaş");
+                shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                mContext.startActivity(shareIntent);
+            } catch (Exception e) {
+                android.util.Log.e("WormArenaShare", "Share failed", e);
+            }
         }
     }
 }
