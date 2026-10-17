@@ -3958,8 +3958,6 @@ class WormArenaGame {
     const myRoomCodeEl = document.getElementById('myRoomCode');
     const copyCodeBtn = document.getElementById('copyCodeBtn');
     const copyRoomLinkBtn = document.getElementById('copyRoomLinkBtn');
-    const shareRoomLinkBtn = document.getElementById('shareRoomLinkBtn');
-    const openRoomLinkBtn = document.getElementById('openRoomLinkBtn');
 
     const lobbyList = document.getElementById('lobbyList');
     const lobbyCount = document.getElementById('lobbyCount');
@@ -4203,43 +4201,6 @@ class WormArenaGame {
             window.showInGameAlert('Oda linki seçildi ve kopyalandı!', 'success');
           }
         });
-      });
-    }
-
-    // 3. Web Katılım Linkini WhatsApp / Sosyal Medyada Paylaş
-    if (shareRoomLinkBtn) {
-      shareRoomLinkBtn.addEventListener('click', () => {
-        const roomCode = this.network.roomCode;
-        if (!roomCode) {
-          window.showInGameAlert('Oda kodu hazırlanıyor, lütfen bekleyin...', 'warning');
-          return;
-        }
-
-        const inviteUrl = this.getInviteLink(roomCode);
-        const shareMsg = `🎮 Worm Arena Odama Davetlisin!\nOda Kodu: ${roomCode}\n\n👉 Tek tıkla tarayıcıda doğrudan odaya girmek için tıkla:\n${inviteUrl}`;
-
-        if (navigator.share) {
-          navigator.share({
-            title: 'Worm Arena',
-            text: shareMsg,
-            url: inviteUrl
-          }).catch(() => {
-            window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareMsg)}`, '_blank');
-          });
-        } else {
-          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareMsg)}`, '_blank');
-        }
-      });
-    }
-
-    if (openRoomLinkBtn) {
-      openRoomLinkBtn.addEventListener('click', () => {
-        const roomCode = this.network.roomCode;
-        if (roomCode) {
-          window.open(this.getInviteLink(roomCode), '_blank');
-        } else {
-          window.showInGameAlert('Oda kodu hazırlanıyor...', 'warning');
-        }
       });
     }
 
