@@ -391,6 +391,15 @@ class NetworkManager {
         worm.targetAngle = data.targetAngle;
         worm.isBoosting = !!data.isBoosting;
       }
+    } else if (data.type === 'CLIENT_DIED') {
+      const rw = this.remotePlayers.get(peerId);
+      if (rw && !rw.isDead) {
+        rw.isDead = true;
+        rw.killedBy = data.killedBy || 'Arena Duvarına';
+        if (this.game && this.game.dropFoodFromWorm) {
+          this.game.dropFoodFromWorm(rw);
+        }
+      }
     } else if (data.type === 'PLAYER_RESPAWN') {
       // Ölen istemci tekrar canlanmak istediğinde
       const pInfo = this.lobbyPlayers.get(peerId);
@@ -401,6 +410,7 @@ class NetworkManager {
         const worm = new Worm(rx, ry, pInfo.name, skin, false);
         worm.peerId = peerId;
         worm.hat = pInfo.hatId;
+        worm.ghostTimer = 180;
         this.remotePlayers.set(peerId, worm);
 
         const conn = this.connections.get(peerId);
@@ -820,7 +830,13 @@ class NetworkManager {
           worm.score = wData.score;
           worm.kills = wData.kills || 0;
           worm.isBoosting = !!wData.isBoosting;
+          const wasDead = worm.isDead;
           worm.isDead = !!wData.isDead;
+          if (!wasDead && worm.isDead) {
+            if (this.game && this.game.createDeathBurst) {
+              this.game.createDeathBurst(worm.x, worm.y);
+            }
+          }
           worm.hat = wData.hatId || worm.hat;
         }
       });

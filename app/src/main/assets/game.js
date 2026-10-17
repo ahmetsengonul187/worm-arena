@@ -1874,6 +1874,14 @@ class WormArenaGame {
       pulse: Math.random() * Math.PI * 2
     };
     this.foods.push(newFood);
+    if (this.network && this.network.isMultiplayer && this.network.isHost) {
+      if (!this.pendingNewFoods) this.pendingNewFoods = [];
+      this.pendingNewFoods.push({
+        x: Math.round(fx),
+        y: Math.round(fy),
+        type: newFood.type
+      });
+    }
     return newFood;
   }
 
@@ -2230,6 +2238,11 @@ class WormArenaGame {
       // Arena duvarına çarpma kontrolü
       if (this.player.isDead) {
         this.handlePlayerDeath('Arena Duvarına');
+        if (this.network.isMultiplayer && !this.network.isHost && this.network.hostConn) {
+          try {
+            this.network.hostConn.send({ type: 'CLIENT_DIED', killedBy: 'Arena Duvarına' });
+          } catch (e) {}
+        }
         return;
       }
 
@@ -2275,7 +2288,13 @@ class WormArenaGame {
 
     // Odaya bağlı tüm uzaktaki oyuncuları sunucu olarak ilerlet
     for (const rw of remotePlayersList) {
-      rw.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
+      if (!rw.isDead) {
+        rw.update(this.worldWidth, this.worldHeight, this.foods, allWorms);
+        if (rw.isDead) {
+          rw.killedBy = 'Arena Duvarına';
+          this.dropFoodFromWorm(rw);
+        }
+      }
     }
 
     // Botları ilerlet
@@ -2301,11 +2320,18 @@ class WormArenaGame {
     // Solucan Çarpışmaları (Kafa ve Gövde)
     this.checkWormCollisions(allWorms);
 
-    // Çok oyunculu sunucu tick yayını (Host öldüğünde de devam eder!)
+    // Çok oyunculu sunucu tick yayını (Ölen yılanların yıldızlı yemleri ve yeni yemler eksiksiz yayılır!)
     if (this.network.isMultiplayer && this.network.isHost) {
       this.broadcastTickCounter = (this.broadcastTickCounter || 0) + 1;
-      if (this.broadcastTickCounter % 2 === 0) {
-        this.network.broadcastState(allWorms, newFoods, eatenIndices);
+      if (!this.pendingNewFoods) this.pendingNewFoods = [];
+      if (newFoods.length > 0) {
+        this.pendingNewFoods.push(...newFoods);
+      }
+      const hasPendingFoods = this.pendingNewFoods.length > 0;
+      if (this.broadcastTickCounter % 2 === 0 || hasPendingFoods) {
+        const foodsToSend = this.pendingNewFoods;
+        this.pendingNewFoods = [];
+        this.network.broadcastState(allWorms, foodsToSend, eatenIndices);
       }
     }
 
@@ -2646,15 +2672,79 @@ class WormArenaGame {
     this.leaderboardList.innerHTML = html;
   }
 
+  createDeathBurst(x, y) {
+    for (let i = 0; i < 35; i++) {
+      this.particles.push({
+        x: x + (Math.random() - 0.5) * 40,
+        y: y + (Math.random() - 0.5) * 40,
+        vx: (Math.random() - 0.5) * 12,
+        vy: (Math.random() - 0.5) * 12,
+        color: Math.random() < 0.6 ? '#ffd700' : '#ffea00',
+        alpha: 1,
+        size: Math.random() * 5 + 3
+      });
+    }
+    if (sounds && sounds.playDie) {
+      sounds.playDie();
+    }
+  }
+
   returnToMenu() {
     this.state = 'START';
-    this.network.disconnect();
-    this.startScreen.classList.remove('hidden');
-    this.gameOverScreen.classList.add('hidden');
-    this.hudRoomBadge.classList.add('hidden');
-    if (this.joystickZone) this.joystickZone.classList.add('hidden');
+    if (this.network) {
+      try { this.network.disconnect(); } catch (e) {}
+    }
+    this.player = null;
+    this.bots = [];
+
+    // URL'deki oda davet kodunu temizle (menüdeyken tekrar tetiklenmesin)
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    } catch (e) {}
+
+    // Tüm oyun içi pencereleri ve modalları kapat
+    const exitConfirmModal = document.getElementById('exitConfirmModal');
+    if (exitConfirmModal) {
+      exitConfirmModal.classList.add('hidden');
+      exitConfirmModal.style.display = 'none';
+    }
+
+    const multiplayerModal = document.getElementById('multiplayerModal');
+    if (multiplayerModal) {
+      multiplayerModal.classList.add('hidden');
+      multiplayerModal.style.display = 'none';
+    }
+
+    if (this.gameOverScreen) {
+      this.gameOverScreen.classList.add('hidden');
+      this.gameOverScreen.style.display = 'none';
+    }
+
+    if (this.joystickZone) {
+      this.joystickZone.classList.add('hidden');
+    }
+    if (this.joystickBase) {
+      this.joystickBase.classList.add('hidden');
+    }
+    this.joystick.active = false;
+
+    if (this.hudRoomBadge) {
+      this.hudRoomBadge.classList.add('hidden');
+    }
+
+    // Ana menü ekranını eksiksiz ve kesin olarak görünür yap
+    if (this.startScreen) {
+      this.startScreen.classList.remove('hidden');
+      this.startScreen.style.display = 'flex';
+    }
+
     this.updateEconomyUI();
-    sounds.startMenuMusic();
+    this.drawSkinPreview();
+    if (sounds && sounds.startMenuMusic) {
+      sounds.startMenuMusic();
+    }
   }
 
   // ==================== EKONOMİ & İLERLEME ====================
@@ -4195,68 +4285,52 @@ class WormArenaGame {
     const updateSteering = (clientX, clientY) => {
       if (!this.player || (this.state !== 'PLAYING' && this.state !== 'DYING')) return;
 
-      const screenCenterX = window.innerWidth / 2;
-      const screenCenterY = window.innerHeight / 2;
+      // Farenin ekran koordinatı ile yılanın kafasının ekran koordinatı arasındaki açı
+      const playerScreenX = this.player.x - this.camera.x;
+      const playerScreenY = this.player.y - this.camera.y;
 
-      const dx = clientX - screenCenterX;
-      const dy = clientY - screenCenterY;
-      if (Math.hypot(dx, dy) > 6) {
+      const dx = clientX - playerScreenX;
+      const dy = clientY - playerScreenY;
+      if (Math.hypot(dx, dy) > 10) {
         this.player.targetAngle = Math.atan2(dy, dx);
       }
     };
 
-    // Masaüstü ve Tarayıcı Fare / İşaretçi Kontrolleri
-    window.addEventListener('mousemove', (e) => {
-      if (this.state === 'PLAYING') {
-        updateSteering(e.clientX, e.clientY);
+    // Klavye (WASD ve Ok Tuşları) ile Yönlendirme (Tarayıcı / Masaüstü için)
+    const activeKeys = new Set();
+    const updateKeyboardSteering = () => {
+      if (!this.player || (this.state !== 'PLAYING' && this.state !== 'DYING')) return;
+      let kx = 0;
+      let ky = 0;
+      if (activeKeys.has('KeyW') || activeKeys.has('ArrowUp')) ky -= 1;
+      if (activeKeys.has('KeyS') || activeKeys.has('ArrowDown')) ky += 1;
+      if (activeKeys.has('KeyA') || activeKeys.has('ArrowLeft')) kx -= 1;
+      if (activeKeys.has('KeyD') || activeKeys.has('ArrowRight')) kx += 1;
+
+      if (kx !== 0 || ky !== 0) {
+        this.player.targetAngle = Math.atan2(ky, kx);
+      }
+    };
+
+    window.addEventListener('keydown', (e) => {
+      if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        activeKeys.add(e.code);
+        updateKeyboardSteering();
       }
     });
 
-    // Pointer Events (Hem Fare, Hem Stylus, Hem Dokunmatik Tarayıcı Desteği)
-    window.addEventListener('pointermove', (e) => {
-      if (this.state === 'PLAYING') {
-        updateSteering(e.clientX, e.clientY);
+    window.addEventListener('keyup', (e) => {
+      if (['KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        activeKeys.delete(e.code);
+        updateKeyboardSteering();
       }
     });
 
-    window.addEventListener('pointerdown', (e) => {
-      if (this.state === 'PLAYING') {
-        const el = document.elementFromPoint(e.clientX, e.clientY);
-        if (el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop')) {
-          return;
-        }
-        updateSteering(e.clientX, e.clientY);
-      }
-    });
+    // ==================== SANAL JOYSTICK (MOBİL VE TARAYICI DESTEKLİ) ====================
+    let joystickPointerId = null;
 
-    // Doğrudan Dokunmatik / Mobil Tarayıcı Kontrolleri (Tüm Ekranda Kesintisiz Yönlendirme)
-    window.addEventListener('touchmove', (e) => {
-      if (this.state === 'PLAYING' && e.touches.length > 0) {
-        const t = e.touches[0];
-        const el = document.elementFromPoint(t.clientX, t.clientY);
-        if (el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop')) {
-          return;
-        }
-        updateSteering(t.clientX, t.clientY);
-      }
-    }, { passive: true });
-
-    window.addEventListener('touchstart', (e) => {
-      if (this.state === 'PLAYING' && e.touches.length > 0) {
-        const t = e.touches[0];
-        const el = document.elementFromPoint(t.clientX, t.clientY);
-        if (el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop')) {
-          return;
-        }
-        updateSteering(t.clientX, t.clientY);
-      }
-    }, { passive: true });
-
-    // Mobil Joystick (Tüm Ekran Destekli - Hem Sağ Hem Sol - Çoklu Dokunmatik)
-    let joystickTouchId = null;
-
-    const startJoystickAt = (clientX, clientY, touchId) => {
-      joystickTouchId = touchId;
+    const startJoystickAt = (clientX, clientY, identifier) => {
+      joystickPointerId = identifier;
       this.joystick.active = true;
 
       const controlMode = (this.settings && this.settings.controlMode) || 'dynamic';
@@ -4274,6 +4348,7 @@ class WormArenaGame {
         this.joystick.startX = clientX;
         this.joystick.startY = clientY;
         this.joystickBase.classList.add('hidden');
+        updateSteering(clientX, clientY);
       } else {
         // dynamic
         this.joystick.startX = clientX;
@@ -4282,10 +4357,6 @@ class WormArenaGame {
         this.joystickBase.style.top = `${clientY}px`;
         this.joystickThumb.style.transform = 'translate(-50%, -50%)';
         this.joystickBase.classList.remove('hidden');
-      }
-
-      if (this.player) {
-        updateSteering(clientX, clientY);
       }
     };
 
@@ -4315,9 +4386,9 @@ class WormArenaGame {
       }
     };
 
-    const stopJoystick = (touchId) => {
-      if (touchId === undefined || touchId === joystickTouchId) {
-        joystickTouchId = null;
+    const stopJoystick = (identifier) => {
+      if (identifier === undefined || identifier === joystickPointerId || joystickPointerId === null) {
+        joystickPointerId = null;
         this.joystick.active = false;
         const controlMode = (this.settings && this.settings.controlMode) || 'dynamic';
         if (controlMode !== 'fixed') {
@@ -4328,17 +4399,51 @@ class WormArenaGame {
       }
     };
 
+    // İşaretçi (Fare Tıklama & Sürükleme veya Dokunmatik)
+    const onPointerDown = (e) => {
+      if (this.state !== 'PLAYING') return;
+      if (e.button !== undefined && e.button !== 0) return; // Sadece sol tık
+
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if (el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop')) {
+        return;
+      }
+
+      startJoystickAt(e.clientX, e.clientY, e.pointerId !== undefined ? e.pointerId : 'mouse');
+    };
+
+    const onPointerMove = (e) => {
+      if (this.state !== 'PLAYING' || !this.player) return;
+
+      const pId = e.pointerId !== undefined ? e.pointerId : 'mouse';
+      if (this.joystick.active && (joystickPointerId === pId || joystickPointerId === null)) {
+        moveJoystickAt(e.clientX, e.clientY);
+      } else if (!this.joystick.active && e.pointerType === 'mouse' && e.buttons === 0) {
+        updateSteering(e.clientX, e.clientY);
+      }
+    };
+
+    const onPointerUp = (e) => {
+      const pId = e.pointerId !== undefined ? e.pointerId : 'mouse';
+      if (this.joystick.active && (joystickPointerId === pId || joystickPointerId === null)) {
+        stopJoystick(pId);
+      }
+    };
+
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+
+    // Dokunmatik cihazlar için özel touch eventleri (iOS & Android WebView tam uyumluluk)
     const onScreenTouchStart = (e) => {
       if (this.state !== 'PLAYING') return;
-
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i];
         const el = document.elementFromPoint(t.clientX, t.clientY);
-        // Boost butonu, HUD ve emojiler hariç tüm ekranda joystick açılır
         if (el && el.closest('.boost-control-container, .hud-top, .in-game-emotes, .minimap-container, button, .modal-backdrop')) {
           continue;
         }
-
         e.preventDefault();
         startJoystickAt(t.clientX, t.clientY, t.identifier);
         break;
@@ -4347,10 +4452,9 @@ class WormArenaGame {
 
     const onScreenTouchMove = (e) => {
       if (this.state !== 'PLAYING' || !this.player) return;
-
       for (let i = 0; i < e.touches.length; i++) {
         const t = e.touches[i];
-        if (t.identifier === joystickTouchId || e.touches.length === 1) {
+        if (t.identifier === joystickPointerId || e.touches.length === 1) {
           e.preventDefault();
           moveJoystickAt(t.clientX, t.clientY);
           break;
@@ -4364,7 +4468,7 @@ class WormArenaGame {
         return;
       }
       for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === joystickTouchId) {
+        if (e.changedTouches[i].identifier === joystickPointerId) {
           stopJoystick(e.changedTouches[i].identifier);
           break;
         }
@@ -4380,6 +4484,10 @@ class WormArenaGame {
     this.canvas.addEventListener('touchmove', onScreenTouchMove, { passive: false });
     this.canvas.addEventListener('touchend', onScreenTouchEnd, { passive: true });
     this.canvas.addEventListener('touchcancel', onScreenTouchEnd, { passive: true });
+
+    window.addEventListener('touchmove', onScreenTouchMove, { passive: false });
+    window.addEventListener('touchend', onScreenTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onScreenTouchEnd, { passive: true });
 
     // Turbo Hızlanma (Tek Dokunuşla Başlatma & Dairesel Sayaç)
     const onBoostToggle = (e) => {
@@ -4524,22 +4632,43 @@ class WormArenaGame {
     const cancelExitBtn = document.getElementById('cancelExitBtn');
 
     if (exitGameBtn && exitConfirmModal) {
-      exitGameBtn.addEventListener('click', () => {
+      const showExitModal = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         exitConfirmModal.classList.remove('hidden');
-      });
+        exitConfirmModal.style.display = 'flex';
+      };
+      exitGameBtn.addEventListener('click', showExitModal);
+      exitGameBtn.addEventListener('touchend', showExitModal);
     }
 
     if (confirmExitBtn && exitConfirmModal) {
-      confirmExitBtn.addEventListener('click', () => {
+      const handleConfirmExit = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         exitConfirmModal.classList.add('hidden');
+        exitConfirmModal.style.display = 'none';
         this.returnToMenu();
-      });
+      };
+      confirmExitBtn.addEventListener('click', handleConfirmExit);
+      confirmExitBtn.addEventListener('touchend', handleConfirmExit);
     }
 
     if (cancelExitBtn && exitConfirmModal) {
-      cancelExitBtn.addEventListener('click', () => {
+      const handleCancelExit = (e) => {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
         exitConfirmModal.classList.add('hidden');
-      });
+        exitConfirmModal.style.display = 'none';
+      };
+      cancelExitBtn.addEventListener('click', handleCancelExit);
+      cancelExitBtn.addEventListener('touchend', handleCancelExit);
     }
   }
 
