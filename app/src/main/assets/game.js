@@ -3980,46 +3980,31 @@ class WormArenaGame {
 
     // UI Lobi Listesini Render Etme Fonksiyonu
     const renderLobbyPlayers = (players, roomCode) => {
-      if (this.network.isHost) {
-        // HOST GÖRÜNÜMÜ: Odaya gelen herkesi anlık liste olarak göster
-        if (lobbyList) {
-          lobbyList.innerHTML = '';
-          players.forEach((p) => {
-            const li = document.createElement('li');
-            li.className = p.isHost ? 'lobby-item is-host' : 'lobby-item';
-            li.innerHTML = `
-              <span class="lobby-player-icon">${p.isHost ? '👑' : '🟢'}</span>
-              <span class="lobby-player-name">${this.escapeHtml(p.name)} ${p.isHost ? '(Sen)' : ''}</span>
-              <span class="lobby-ready-badge ${p.isHost ? 'leader' : ''}">${p.isHost ? 'LİDER' : 'HAZIR'}</span>
-            `;
-            lobbyList.appendChild(li);
-          });
-        }
-        if (lobbyCount) lobbyCount.textContent = players.length.toString();
-
-        if (startRoomGameBtnText) {
-          if (players.length > 1) {
-            startRoomGameBtnText.textContent = `ARENAYI BAŞLAT (${players.length} Oyuncuyla Başla) 🚀`;
-          } else {
-            startRoomGameBtnText.textContent = 'ARENAYI BAŞLAT 🚀';
-          }
-        }
-        if (lobbyStatusBadge) {
-          lobbyStatusBadge.textContent = players.length > 1 ? `🟢 ${players.length} Oyuncu Hazır` : '🟢 Lobi Açık';
-        }
-      } else {
+      // YALNIZCA bir başkasının odasına bağlanmış bir misafir (client) ise bekleme odasını göster
+      if (!this.network.isHost && this.network.hostConn) {
         // İSTEMCİ (CLIENT) GÖRÜNÜMÜ: Odaya katılan arkadaş bekleme odasında lobiyi izler
-        // EĞER OYUN BAŞLADIYSA BEKLEME PENCERESİNİ ASLA TEKRAR AÇMA!
         if (this.state === 'PLAYING') return;
 
         if (multiplayerModal) {
           multiplayerModal.classList.remove('hidden');
-          multiplayerModal.style.display = '';
+          multiplayerModal.style.display = 'flex';
         }
-        if (roomTabsBar) roomTabsBar.classList.add('hidden');
-        if (createRoomContent) createRoomContent.classList.add('hidden');
-        if (joinRoomContent) joinRoomContent.classList.add('hidden');
-        if (waitingRoomContent) waitingRoomContent.classList.remove('hidden');
+        if (roomTabsBar) {
+          roomTabsBar.classList.add('hidden');
+          roomTabsBar.style.display = 'none';
+        }
+        if (createRoomContent) {
+          createRoomContent.classList.add('hidden');
+          createRoomContent.style.display = 'none';
+        }
+        if (joinRoomContent) {
+          joinRoomContent.classList.add('hidden');
+          joinRoomContent.style.display = 'none';
+        }
+        if (waitingRoomContent) {
+          waitingRoomContent.classList.remove('hidden');
+          waitingRoomContent.style.display = 'block';
+        }
 
         if (clientLobbyList) {
           clientLobbyList.innerHTML = '';
@@ -4050,6 +4035,46 @@ class WormArenaGame {
         const waitingOwnerNotice = document.getElementById('waitingOwnerNotice');
         if (waitingOwnerNotice) {
           waitingOwnerNotice.textContent = 'Oda sahibi henüz oyunu başlatmadı. Lütfen bekleyin...';
+        }
+      } else {
+        // HOST / ODA KURUCU GÖRÜNÜMÜ: Sekmeler ve Oda Kurma Alanı Kesinlikle Açık Kalır!
+        if (roomTabsBar) {
+          roomTabsBar.classList.remove('hidden');
+          roomTabsBar.style.display = 'grid';
+        }
+        if (createRoomContent) {
+          createRoomContent.classList.remove('hidden');
+          createRoomContent.style.display = 'block';
+        }
+        if (waitingRoomContent) {
+          waitingRoomContent.classList.add('hidden');
+          waitingRoomContent.style.display = 'none';
+        }
+
+        if (lobbyList) {
+          lobbyList.innerHTML = '';
+          players.forEach((p) => {
+            const li = document.createElement('li');
+            li.className = p.isHost ? 'lobby-item is-host' : 'lobby-item';
+            li.innerHTML = `
+              <span class="lobby-player-icon">${p.isHost ? '👑' : '🟢'}</span>
+              <span class="lobby-player-name">${this.escapeHtml(p.name)} ${p.isHost ? '(Sen)' : ''}</span>
+              <span class="lobby-ready-badge ${p.isHost ? 'leader' : ''}">${p.isHost ? 'LİDER' : 'HAZIR'}</span>
+            `;
+            lobbyList.appendChild(li);
+          });
+        }
+        if (lobbyCount) lobbyCount.textContent = players.length.toString();
+
+        if (startRoomGameBtnText) {
+          if (players.length > 1) {
+            startRoomGameBtnText.textContent = `ARENAYI BAŞLAT (${players.length} Oyuncuyla Başla) 🚀`;
+          } else {
+            startRoomGameBtnText.textContent = 'ARENAYI BAŞLAT 🚀';
+          }
+        }
+        if (lobbyStatusBadge) {
+          lobbyStatusBadge.textContent = players.length > 1 ? `🟢 ${players.length} Oyuncu Hazır` : '🟢 Lobi Açık';
         }
       }
     };
@@ -4102,6 +4127,7 @@ class WormArenaGame {
     // Arkadaşlarla Oyna butonuna basıldığında (HER ZAMAN KESİNLİKLE ODA KUR SEKMESİ İLE AÇILIR)
     if (openFriendsRoomBtn && multiplayerModal) {
       openFriendsRoomBtn.addEventListener('click', () => {
+        this.network.isHost = true; // KESİNLİKLE İLK ANDAN İTİBAREN HOST MODUNA AL
         multiplayerModal.classList.remove('hidden');
         multiplayerModal.style.display = 'flex';
         if (roomTabsBar) {
