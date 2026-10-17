@@ -2241,15 +2241,21 @@ class WormArenaGame {
       this.eventTimer = 0;
     }
 
-    // Mıknatıs Gücü Kontrolü (Yiyecekleri Vakumlama)
+    // Mıknatıs Gücü Kontrolü (Yiyecekleri doğrudan yılanın ağzına doğru akıcı vakumlama)
     if (this.player && this.player.magnetTimer > 0) {
-      const magnetRange = 260;
+      const magnetRange = 300;
+      // Yemi doğrudan yılanın burnuna / ağzına doğru çek
+      const snoutX = this.player.x + Math.cos(this.player.angle) * (this.player.radius * 0.9);
+      const snoutY = this.player.y + Math.sin(this.player.angle) * (this.player.radius * 0.9);
       for (const food of this.foods) {
-        const d = Math.hypot(food.x - this.player.x, food.y - this.player.y);
-        if (d < magnetRange) {
-          const angle = Math.atan2(this.player.y - food.y, this.player.x - food.x);
-          food.x += Math.cos(angle) * 9;
-          food.y += Math.sin(angle) * 9;
+        const dx = snoutX - food.x;
+        const dy = snoutY - food.y;
+        const d = Math.hypot(dx, dy);
+        if (d < magnetRange && d > 1) {
+          // Yaklaştıkça artan akıcı vakum hızı (Yem havada kaybolmaz, doğrudan ağza uçar!)
+          const pullSpeed = Math.min(d, Math.max(10, (1 - d / magnetRange) * 26 + 10));
+          food.x += (dx / d) * pullSpeed;
+          food.y += (dy / d) * pullSpeed;
         }
       }
     }
@@ -2476,16 +2482,15 @@ class WormArenaGame {
 
     for (const worm of allWorms) {
       if (worm.isDead) continue;
-      // Cömert ve gerçekçi yeme yarıçapı (Yılanın kafası yıldıza veya yeme dokunduğu anda anında yutulur!)
-      const baseEatRadius = Math.max(48, worm.radius * 2.0 + 20);
-      const eatRadius = worm.magnetTimer > 0 ? Math.max(baseEatRadius, 160) : baseEatRadius;
-      const eatRadiusSq = eatRadius * eatRadius;
-
-      // Yılanın burnu/ağzı merkezden 1.1*radius öne uzanır (Kafanın ön ucu)
-      const snoutDist = worm.radius * 1.1;
+      // Ağız/Burun pozisyonu (kafanın en ön ucu)
+      const snoutDist = worm.radius * 0.95;
       const snoutX = worm.x + Math.cos(worm.angle) * snoutDist;
       const snoutY = worm.y + Math.sin(worm.angle) * snoutDist;
-      const snoutRadiusSq = (baseEatRadius * 0.95) * (baseEatRadius * 0.95);
+
+      // Gerçekçi temas mesafesi: Yılan kafasının/ağzının gerçek fiziksel yarıçapı + yem yarıçapı
+      // Yem havada erkenden yok olmaz, tam kafanın/ağzın ucuna değdiği anda yenir!
+      const contactRadius = worm.radius * 1.1 + 8;
+      const contactRadiusSq = contactRadius * contactRadius;
 
       // Yılanın bu karedeki hareket çizgisi (Swept circle - Hızlıyken yemlerin üzerinden atlamayı %100 bitirir)
       const prevX = worm.prevX !== undefined ? worm.prevX : worm.x;
@@ -2497,29 +2502,22 @@ class WormArenaGame {
       for (let i = this.foods.length - 1; i >= 0; i--) {
         const food = this.foods[i];
 
-        // 1. Ağız / Burun ucu mesafesi
+        // 1. Ağız / Burun ucu temas mesafesi
         const sdx = food.x - snoutX;
         const sdy = food.y - snoutY;
-        let isEaten = (sdx * sdx + sdy * sdy < snoutRadiusSq);
+        let isEaten = (sdx * sdx + sdy * sdy < contactRadiusSq);
 
-        // 2. Kafa merkezi veya swept çizgi mesafesi
-        if (!isEaten) {
-          let distSq;
-          if (segLenSq > 0) {
-            let t = ((food.x - prevX) * segDx + (food.y - prevY) * segDy) / segLenSq;
-            t = Math.max(0, Math.min(1, t));
+        // 2. Kafa hareket çizgisi boyuncaki temas mesafesi
+        if (!isEaten && segLenSq > 0) {
+          let t = ((food.x - prevX) * segDx + (food.y - prevY) * segDy) / segLenSq;
+          if (t >= 0 && t <= 1) {
             const closeX = prevX + t * segDx;
             const closeY = prevY + t * segDy;
             const cdx = food.x - closeX;
             const cdy = food.y - closeY;
-            distSq = cdx * cdx + cdy * cdy;
-          } else {
-            const cdx = food.x - worm.x;
-            const cdy = food.y - worm.y;
-            distSq = cdx * cdx + cdy * cdy;
-          }
-          if (distSq < eatRadiusSq) {
-            isEaten = true;
+            if (cdx * cdx + cdy * cdy < contactRadiusSq) {
+              isEaten = true;
+            }
           }
         }
 
@@ -3443,6 +3441,9 @@ class WormArenaGame {
         claimedDays: []
       };
     }
+    if (!this.milestoneData.claimedDays || !Array.isArray(this.milestoneData.claimedDays)) {
+      this.milestoneData.claimedDays = [];
+    }
 
     // Günlük Giriş Takibi (Unique Login Days)
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -3462,6 +3463,55 @@ class WormArenaGame {
     if (validNextMilestone && (!SEVEN_DAY_REWARDS.some(m => m.day === this.milestoneData.currentDay) || this.milestoneData.currentDay === 8)) {
       this.milestoneData.currentDay = validNextMilestone.day;
       localStorage.setItem('worm_milestone_data', JSON.stringify(this.milestoneData));
+    }
+  }
+
+  claimMilestoneReward(ms) {
+    try {
+      if (!this.milestoneData) this.initQuestsSystem();
+      if (!this.milestoneData.claimedDays || !Array.isArray(this.milestoneData.claimedDays)) {
+        this.milestoneData.claimedDays = [];
+      }
+      if (!this.unlockedHats || !Array.isArray(this.unlockedHats)) {
+        this.unlockedHats = ['none'];
+      }
+      if (!this.unlockedSkins || !Array.isArray(this.unlockedSkins)) {
+        this.unlockedSkins = ['white_king'];
+      }
+
+      if (!this.milestoneData.claimedDays.includes(ms.day)) {
+        this.milestoneData.claimedDays.push(ms.day);
+      }
+
+      // Bir sonraki aşamayı belirle (7 -> 15 -> 30 -> 60 -> 90 -> 120 -> 150 -> 180 -> 365)
+      const curIdx = SEVEN_DAY_REWARDS.findIndex(m => m.day === ms.day);
+      if (curIdx !== -1 && curIdx < SEVEN_DAY_REWARDS.length - 1) {
+        this.milestoneData.currentDay = SEVEN_DAY_REWARDS[curIdx + 1].day;
+      } else {
+        this.milestoneData.currentDay = 999;
+      }
+      this.milestoneData.currentScore = 0;
+      localStorage.setItem('worm_milestone_data', JSON.stringify(this.milestoneData));
+
+      if (ms.rewardCoins) this.addCoins(ms.rewardCoins);
+      if (ms.rewardXp) this.addXp(ms.rewardXp);
+      if (ms.rewardItem && !this.unlockedHats.includes(ms.rewardItem)) {
+        this.unlockedHats.push(ms.rewardItem);
+        localStorage.setItem('worm_unlocked_hats', JSON.stringify(this.unlockedHats));
+      }
+      if (ms.rewardSkin && !this.unlockedSkins.includes(ms.rewardSkin)) {
+        this.unlockedSkins.push(ms.rewardSkin);
+        localStorage.setItem('worm_unlocked_skins', JSON.stringify(this.unlockedSkins));
+      }
+
+      if (sounds && sounds.playWheelWin) sounds.playWheelWin();
+      if (window.showInGameAlert) {
+        window.showInGameAlert(`🎉 TEBRİKLER! ${ms.day}. Gün Büyük Aşama Ödülü (${ms.rewardText}) Açıldı!`, 'level_up', '🎁 EFSANEVİ AŞAMA ÖDÜLÜ');
+      }
+      this.renderQuestsUI();
+      this.updateEconomyUI();
+    } catch (err) {
+      console.error('Error claiming milestone reward:', err);
     }
   }
 
@@ -3546,37 +3596,20 @@ class WormArenaGame {
         if (canClaim) {
           box.title = 'Ödülünü almak için dokun!';
           box.style.cursor = 'pointer';
-          box.addEventListener('click', () => {
-            if (!this.milestoneData.claimedDays.includes(ms.day)) {
-              this.milestoneData.claimedDays.push(ms.day);
+          const onClaim = (e) => {
+            if (e) {
+              e.preventDefault();
+              e.stopPropagation();
             }
-
-            // Bir sonraki aşamayı belirle (7 -> 15 -> 30 -> 60 -> 90 -> 120 -> 150 -> 180 -> 365)
-            const curIdx = SEVEN_DAY_REWARDS.findIndex(m => m.day === ms.day);
-            if (curIdx !== -1 && curIdx < SEVEN_DAY_REWARDS.length - 1) {
-              this.milestoneData.currentDay = SEVEN_DAY_REWARDS[curIdx + 1].day;
-            } else {
-              this.milestoneData.currentDay = 999;
-            }
-            this.milestoneData.currentScore = 0;
-            localStorage.setItem('worm_milestone_data', JSON.stringify(this.milestoneData));
-
-            if (ms.rewardCoins) this.addCoins(ms.rewardCoins);
-            if (ms.rewardXp) this.addXp(ms.rewardXp);
-            if (ms.rewardItem && !this.unlockedHats.includes(ms.rewardItem)) {
-              this.unlockedHats.push(ms.rewardItem);
-              localStorage.setItem('worm_unlocked_hats', JSON.stringify(this.unlockedHats));
-            }
-            if (ms.rewardSkin && !this.unlockedSkins.includes(ms.rewardSkin)) {
-              this.unlockedSkins.push(ms.rewardSkin);
-              localStorage.setItem('worm_unlocked_skins', JSON.stringify(this.unlockedSkins));
-            }
-
-            sounds.playWheelWin();
-            window.showInGameAlert(`🎉 TEBRİKLER! ${ms.day}. Gün Büyük Aşama Ödülü (${ms.rewardText}) Açıldı!`, 'level_up', '🎁 EFSANEVİ AŞAMA ÖDÜLÜ');
-            this.renderQuestsUI();
-            this.updateEconomyUI();
-          });
+            this.claimMilestoneReward(ms);
+          };
+          box.addEventListener('click', onClaim);
+          const btnEl = box.querySelector('.day-action-btn');
+          if (btnEl) {
+            btnEl.style.cursor = 'pointer';
+            btnEl.addEventListener('click', onClaim);
+            btnEl.addEventListener('touchend', onClaim);
+          }
         }
         streakDaysRow.appendChild(box);
       });
