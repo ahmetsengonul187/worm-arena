@@ -1639,7 +1639,7 @@ class WormArenaGame {
       '🍬 Renkli şekerler toplanıyor...',
       '🐍 Sevimli solucanlar uyanıyor...',
       '⭐ Harita pırıl pırıl parlatılıyor...',
-      '🎉 Arenaya girmeye hazır mısın?!'
+      '🎉 Oynamaya hazır mısın?!'
     ];
 
     let progress = 0;
@@ -2169,7 +2169,7 @@ class WormArenaGame {
     sounds.playSpecial();
     this.vibrate(40);
     if (window.showInGameAlert) {
-      window.showInGameAlert('🚀 Arenaya Girildi! İyi Şanslar!', 'success', '🎮 OYUN BAŞLADI');
+      window.showInGameAlert('🚀 Oyun Başladı! İyi Şanslar!', 'success', '🎮 OYUN BAŞLADI');
     }
   }
 

@@ -729,7 +729,7 @@ class NetworkManager {
         return; // Zaten oyun başladıysa veya ölü/bitiş durumundaysa mükerrer teyit paketlerini yoksay
       }
 
-      console.log('GAME_START paketi alındı! Arenaya giriliyor...');
+      console.log('GAME_START paketi alındı! Oyuna başlanıyor...');
       this.game.worldWidth = data.worldWidth || 6400;
       this.game.worldHeight = data.worldHeight || 6400;
 
