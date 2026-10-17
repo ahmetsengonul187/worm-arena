@@ -414,6 +414,12 @@ class NetworkManager {
         if (this.game && this.game.dropFoodFromWorm) {
           this.game.dropFoodFromWorm(rw);
         }
+        if (this.game && this.game.updateLeaderboard) {
+          const allWorms = this.game.player
+            ? [this.game.player, ...this.game.bots, ...this.remotePlayers.values()]
+            : [...this.game.bots, ...this.remotePlayers.values()];
+          this.game.updateLeaderboard(allWorms);
+        }
       }
     } else if (data.type === 'PLAYER_RESPAWN') {
       // Ölen istemci tekrar canlanmak istediğinde
@@ -427,6 +433,13 @@ class NetworkManager {
         worm.hat = pInfo.hatId;
         worm.ghostTimer = 180;
         this.remotePlayers.set(peerId, worm);
+
+        if (this.game && this.game.updateLeaderboard) {
+          const allWorms = this.game.player
+            ? [this.game.player, ...this.game.bots, ...this.remotePlayers.values()]
+            : [...this.game.bots, ...this.remotePlayers.values()];
+          this.game.updateLeaderboard(allWorms);
+        }
 
         const conn = this.connections.get(peerId);
         if (this.isConnReady(conn)) {
@@ -851,6 +864,10 @@ class NetworkManager {
             if (this.game && this.game.createDeathBurst) {
               this.game.createDeathBurst(worm.x, worm.y);
             }
+            if (this.game && this.game.updateLeaderboard) {
+              const allWorms = [this.game.player, ...this.remotePlayers.values()];
+              this.game.updateLeaderboard(allWorms);
+            }
           }
           worm.hat = wData.hatId || worm.hat;
         }
@@ -998,6 +1015,12 @@ class NetworkManager {
     if (worm) {
       worm.isDead = true;
       this.remotePlayers.delete(peerId);
+      if (this.game && this.game.updateLeaderboard) {
+        const allWorms = this.isHost
+          ? (this.game.player ? [this.game.player, ...this.game.bots, ...this.remotePlayers.values()] : [...this.game.bots, ...this.remotePlayers.values()])
+          : [this.game.player, ...this.remotePlayers.values()];
+        this.game.updateLeaderboard(allWorms);
+      }
     }
   }
 

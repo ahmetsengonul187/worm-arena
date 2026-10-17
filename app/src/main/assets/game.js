@@ -2575,6 +2575,9 @@ class WormArenaGame {
               this.checkQuestProgress('kill_worms');
             }
 
+            // Ezilen oyuncunun ismini anında liderlik tablosundan sil
+            this.updateLeaderboard(allWorms);
+
             if (attacker === this.player) {
               this.handlePlayerDeath(victim.name);
               return;
@@ -2599,6 +2602,9 @@ class WormArenaGame {
           loser.killedBy = winner.name;
           winner.kills++;
           winner.score += 60;
+
+          // Ezilen oyuncunun ismini anında liderlik tablosundan sil
+          this.updateLeaderboard(allWorms);
 
           if (loser === this.player) {
             this.handlePlayerDeath(winner.name);
@@ -2721,15 +2727,18 @@ class WormArenaGame {
   }
 
   updateLeaderboard(allWorms) {
-    const sorted = [...allWorms].sort((a, b) => b.score - a.score);
+    if (!this.leaderboardList) return;
+    // Sadece CANLI olan solucanları tabloda göster (Ezilen / ölen oyuncular anında tablodan silinir)
+    const aliveWorms = (allWorms || []).filter(w => w && !w.isDead);
+    const sorted = [...aliveWorms].sort((a, b) => b.score - a.score);
 
     const rank = sorted.findIndex(w => w === this.player) + 1;
     if (rank > 0 && rank < this.bestRank) this.bestRank = rank;
 
-    this.playerRankEl.textContent = `#${rank > 0 ? rank : '-'}`;
-    this.playerScoreEl.textContent = Math.floor(this.player.score);
-    this.playerKillsEl.textContent = this.player.kills;
-    this.totalPlayersEl.textContent = allWorms.length;
+    if (this.playerRankEl) this.playerRankEl.textContent = `#${rank > 0 ? rank : '-'}`;
+    if (this.playerScoreEl) this.playerScoreEl.textContent = Math.floor(this.player ? this.player.score : 0);
+    if (this.playerKillsEl) this.playerKillsEl.textContent = this.player ? this.player.kills : 0;
+    if (this.totalPlayersEl) this.totalPlayersEl.textContent = aliveWorms.length;
 
     let html = '';
     const topWorms = sorted.slice(0, 8);
@@ -2738,7 +2747,7 @@ class WormArenaGame {
       const rankClass = idx === 0 ? 'top-1' : idx === 1 ? 'top-2' : idx === 2 ? 'top-3' : '';
       html += `
         <li class="leaderboard-item ${isMe ? 'is-me' : ''} ${rankClass}">
-          <span class="lb-name">${idx + 1}. ${w.name} ${isMe ? '(Sen)' : ''}</span>
+          <span class="lb-name">${idx + 1}. ${this.escapeHtml ? this.escapeHtml(w.name) : w.name} ${isMe ? '(Sen)' : ''}</span>
           <span class="lb-score">${Math.floor(w.score)}</span>
         </li>
       `;
@@ -4096,6 +4105,7 @@ class WormArenaGame {
     if (openFriendsRoomBtn && multiplayerModal) {
       openFriendsRoomBtn.addEventListener('click', () => {
         multiplayerModal.classList.remove('hidden');
+        multiplayerModal.style.display = 'flex';
         if (roomTabsBar) roomTabsBar.classList.remove('hidden');
         if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
 
@@ -4109,7 +4119,7 @@ class WormArenaGame {
         const myName = this.getPlayerName();
         if (hostPlayerNameLobby) hostPlayerNameLobby.textContent = `${myName} (Sen - Lider)`;
 
-        if (!this.network.roomCode || !this.network.isHost) {
+        if (!this.network.roomCode || !this.network.isHost || !this.network.peer || this.network.peer.destroyed) {
           if (myRoomCodeEl) myRoomCodeEl.textContent = 'Kod üretiliyor...';
           if (roomLinkInput) roomLinkInput.value = 'Link oluşturuluyor...';
 
@@ -4122,6 +4132,9 @@ class WormArenaGame {
             if (roomLinkInput) roomLinkInput.value = 'Bağlantı hatası!';
           });
         } else {
+          if (this.network.peer && this.network.peer.disconnected && !this.network.peer.destroyed) {
+            try { this.network.peer.reconnect(); } catch (e) {}
+          }
           if (myRoomCodeEl) myRoomCodeEl.textContent = this.network.roomCode;
           if (roomLinkInput) roomLinkInput.value = this.getInviteLink(this.network.roomCode);
           renderLobbyPlayers(this.network.getLobbyList(), this.network.roomCode);
@@ -4133,6 +4146,7 @@ class WormArenaGame {
     if (closeMultiplayerBtn && multiplayerModal) {
       closeMultiplayerBtn.addEventListener('click', () => {
         multiplayerModal.classList.add('hidden');
+        multiplayerModal.style.display = 'none';
         if (this.network.isMultiplayer && !this.network.isHost && this.state !== 'PLAYING') {
           this.network.disconnect();
         }
@@ -4144,6 +4158,7 @@ class WormArenaGame {
       multiplayerModal.addEventListener('click', (e) => {
         if (e.target === multiplayerModal) {
           multiplayerModal.classList.add('hidden');
+          multiplayerModal.style.display = 'none';
           if (this.network.isMultiplayer && !this.network.isHost && this.state !== 'PLAYING') {
             this.network.disconnect();
           }
@@ -4232,6 +4247,21 @@ class WormArenaGame {
         createRoomContent.classList.remove('hidden');
         joinRoomContent.classList.add('hidden');
         if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
+
+        if (!this.network.roomCode || !this.network.isHost || !this.network.peer || this.network.peer.destroyed) {
+          if (myRoomCodeEl) myRoomCodeEl.textContent = 'Kod üretiliyor...';
+          const roomLinkInput = document.getElementById('roomLinkInput');
+          if (roomLinkInput) roomLinkInput.value = 'Link oluşturuluyor...';
+
+          this.network.createRoom().then(code => {
+            if (myRoomCodeEl) myRoomCodeEl.textContent = code;
+            if (roomLinkInput) roomLinkInput.value = this.getInviteLink(code);
+            renderLobbyPlayers(this.network.getLobbyList(), code);
+          }).catch(() => {
+            if (myRoomCodeEl) myRoomCodeEl.textContent = 'Hata!';
+            if (roomLinkInput) roomLinkInput.value = 'Bağlantı hatası!';
+          });
+        }
       });
 
       tabJoinRoom.addEventListener('click', () => {
@@ -4797,7 +4827,10 @@ class WormArenaGame {
           if (joinRoomCodeInput) joinRoomCodeInput.value = cleanCode;
 
           // Doğrudan bekleme odasını aç (kullanıcıyı sekme veya formla bekletmez!)
-          if (multiplayerModal) multiplayerModal.classList.remove('hidden');
+          if (multiplayerModal) {
+            multiplayerModal.classList.remove('hidden');
+            multiplayerModal.style.display = 'flex';
+          }
           if (roomTabsBar) roomTabsBar.classList.add('hidden');
           if (createRoomContent) createRoomContent.classList.add('hidden');
           if (joinRoomContent) joinRoomContent.classList.add('hidden');
