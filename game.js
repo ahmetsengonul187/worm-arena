@@ -4121,25 +4121,42 @@ class WormArenaGame {
         const myName = this.getPlayerName();
         if (hostPlayerNameLobby) hostPlayerNameLobby.textContent = `${myName} (Sen - Lider)`;
 
-        if (!this.network.roomCode || !this.network.isHost || !this.network.peer || this.network.peer.destroyed) {
-          if (myRoomCodeEl) myRoomCodeEl.textContent = 'Kod üretiliyor...';
-          if (roomLinkInput) roomLinkInput.value = 'Link oluşturuluyor...';
+        // 4 Haneli oda kodunu beklemeden anında üret ve hemen ekranda göster (Asla 'Kod üretiliyor...'da takılı kalmaz!)
+        const roomCode = this.network.roomCode || this.network.generateRoomCode();
+        this.network.roomCode = roomCode;
 
-          this.network.createRoom().then(code => {
+        if (myRoomCodeEl) {
+          myRoomCodeEl.textContent = roomCode;
+        }
+        if (roomLinkInput) {
+          roomLinkInput.value = this.getInviteLink(roomCode);
+        }
+        if (lobbyStatusBadge) {
+          lobbyStatusBadge.textContent = '🟡 Bağlanıyor...';
+          lobbyStatusBadge.className = 'lobby-live-badge waiting';
+        }
+        renderLobbyPlayers(this.network.getLobbyList(), roomCode);
+
+        if (!this.network.isHost || !this.network.peer || this.network.peer.destroyed || this.network.peer.disconnected) {
+          this.network.createRoom(roomCode).then(code => {
             if (myRoomCodeEl) myRoomCodeEl.textContent = code;
             if (roomLinkInput) roomLinkInput.value = this.getInviteLink(code);
+            if (lobbyStatusBadge) {
+              lobbyStatusBadge.textContent = '🟢 Lobi Açık';
+              lobbyStatusBadge.className = 'lobby-live-badge';
+            }
             renderLobbyPlayers(this.network.getLobbyList(), code);
           }).catch(() => {
-            if (myRoomCodeEl) myRoomCodeEl.textContent = 'Hata!';
-            if (roomLinkInput) roomLinkInput.value = 'Bağlantı hatası!';
+            if (lobbyStatusBadge) {
+              lobbyStatusBadge.textContent = '⚠️ Tekrar Dene';
+              lobbyStatusBadge.className = 'lobby-live-badge waiting';
+            }
           });
         } else {
-          if (this.network.peer && this.network.peer.disconnected && !this.network.peer.destroyed) {
-            try { this.network.peer.reconnect(); } catch (e) {}
+          if (lobbyStatusBadge) {
+            lobbyStatusBadge.textContent = '🟢 Lobi Açık';
+            lobbyStatusBadge.className = 'lobby-live-badge';
           }
-          if (myRoomCodeEl) myRoomCodeEl.textContent = this.network.roomCode;
-          if (roomLinkInput) roomLinkInput.value = this.getInviteLink(this.network.roomCode);
-          renderLobbyPlayers(this.network.getLobbyList(), this.network.roomCode);
         }
       });
     }
@@ -4213,18 +4230,31 @@ class WormArenaGame {
         joinRoomContent.classList.add('hidden');
         if (waitingRoomContent) waitingRoomContent.classList.add('hidden');
 
-        if (!this.network.roomCode || !this.network.isHost || !this.network.peer || this.network.peer.destroyed) {
-          if (myRoomCodeEl) myRoomCodeEl.textContent = 'Kod üretiliyor...';
-          const roomLinkInput = document.getElementById('roomLinkInput');
-          if (roomLinkInput) roomLinkInput.value = 'Link oluşturuluyor...';
+        const roomCode = this.network.roomCode || this.network.generateRoomCode();
+        this.network.roomCode = roomCode;
 
-          this.network.createRoom().then(code => {
+        if (myRoomCodeEl) myRoomCodeEl.textContent = roomCode;
+        const roomLinkInput = document.getElementById('roomLinkInput');
+        if (roomLinkInput) roomLinkInput.value = this.getInviteLink(roomCode);
+
+        if (!this.network.isHost || !this.network.peer || this.network.peer.destroyed || this.network.peer.disconnected) {
+          if (lobbyStatusBadge) {
+            lobbyStatusBadge.textContent = '🟡 Bağlanıyor...';
+            lobbyStatusBadge.className = 'lobby-live-badge waiting';
+          }
+          this.network.createRoom(roomCode).then(code => {
             if (myRoomCodeEl) myRoomCodeEl.textContent = code;
             if (roomLinkInput) roomLinkInput.value = this.getInviteLink(code);
+            if (lobbyStatusBadge) {
+              lobbyStatusBadge.textContent = '🟢 Lobi Açık';
+              lobbyStatusBadge.className = 'lobby-live-badge';
+            }
             renderLobbyPlayers(this.network.getLobbyList(), code);
           }).catch(() => {
-            if (myRoomCodeEl) myRoomCodeEl.textContent = 'Hata!';
-            if (roomLinkInput) roomLinkInput.value = 'Bağlantı hatası!';
+            if (lobbyStatusBadge) {
+              lobbyStatusBadge.textContent = '⚠️ Tekrar Dene';
+              lobbyStatusBadge.className = 'lobby-live-badge waiting';
+            }
           });
         }
       });
@@ -4740,16 +4770,20 @@ class WormArenaGame {
 
   // Arkadaşlara gönderilecek doğrudan web katılım linki
   getInviteLink(code) {
-    const defaultPublicUrl = 'https://ahmetsengonul187.github.io/worm-arena';
+    const defaultPublicUrl = 'https://worm-arena.vercel.app';
 
-    // Eğer halihazırda canlı bir web sitesi veya GitHub Pages üzerindeyse o anki adresi kullan
+    // Eğer halihazırda canlı bir web sitesi veya Vercel/özel domain üzerindeyse o anki adresi kullan
     if (window.location.protocol === 'https:' || (window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.startsWith('10.') && !window.location.hostname.startsWith('192.168.'))) {
+      // Eğer kullanıcı adı içeren github.io adresindeyse, gizlilik için temiz vercel linkini döndür
+      if (window.location.hostname.includes('github.io')) {
+        return `${defaultPublicUrl}/?oda=${code}`;
+      }
       const cleanPath = window.location.pathname.replace(/\/index\.html$/, '');
       const basePath = cleanPath.endsWith('/') ? cleanPath : cleanPath + '/';
       return `${window.location.origin}${basePath}?oda=${code}`;
     }
 
-    // Android APK, yerel dosya veya emülatördeyse arkadaşların doğrudan tarayıcıdan/iPhone'dan açabilmesi için GitHub Pages linkini ver
+    // Android APK, yerel dosya veya emülatördeyse doğrudan Vercel linkini ver (Kullanıcı adı içermez)
     return `${defaultPublicUrl}/?oda=${code}`;
   }
 

@@ -87,6 +87,17 @@ class NetworkManager {
         return;
       }
 
+      let isFinished = false;
+      const timeoutTimer = setTimeout(() => {
+        if (!isFinished && (!this.peer || !this.myPeerId)) {
+          isFinished = true;
+          console.warn('Oda sunucusu 6.5s içinde yanıt vermedi. Yeni oda kodu ile tekrar deneniyor...');
+          try { if (this.peer) this.peer.destroy(); } catch (e) {}
+          this.peer = null;
+          this.createRoom(this.generateRoomCode()).then(resolve).catch(reject);
+        }
+      }, 6500);
+
       this.peer = new Peer(peerId, {
         debug: 1,
         config: {
@@ -96,6 +107,9 @@ class NetworkManager {
       });
 
       this.peer.on('open', (id) => {
+        if (isFinished) return;
+        isFinished = true;
+        clearTimeout(timeoutTimer);
         this.myPeerId = id;
         console.log('Oda kuruldu! Kod:', this.roomCode, 'Peer ID:', id);
 
@@ -125,7 +139,7 @@ class NetworkManager {
       });
 
       this.peer.on('disconnected', () => {
-        console.warn('Oda sahibi sinyal sunucusundan ayrıldı (arka plan / WhatsApp geçişi). Yeniden bağlanılıyor...');
+        console.warn('Oda sahibi sinyal sunucusundan ayrıldı (arka plan / sekme geçişi). Yeniden bağlanılıyor...');
         if (this.peer && !this.peer.destroyed) {
           try {
             this.peer.reconnect();
@@ -136,14 +150,16 @@ class NetworkManager {
       });
 
       this.peer.on('error', (err) => {
+        if (isFinished) return;
         console.error('Peer error:', err);
         if (err.type === 'unavailable-id') {
-          // Kod çakıştıysa yeni bir kod ile dene
+          // Kod çakıştıysa yeni bir kod ile hemen tekrar dene
+          isFinished = true;
+          clearTimeout(timeoutTimer);
           this.createRoom(this.generateRoomCode()).then(resolve).catch(reject);
         } else {
-          if (window.showInGameAlert) {
-            window.showInGameAlert('Oda kurulamadı. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.', 'warning', '⚠️ ODA HATASI');
-          }
+          isFinished = true;
+          clearTimeout(timeoutTimer);
           if (this.onError) this.onError(err);
           reject(err);
         }

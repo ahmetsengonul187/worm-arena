@@ -987,64 +987,77 @@ html, body {
 }
 
 .room-code-display {
-  background: rgba(14, 20, 36, 0.9);
-  border: 1.5px solid rgba(0, 240, 255, 0.3);
-  border-radius: 14px;
-  padding: 12px;
-  margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(16, 24, 46, 0.95), rgba(8, 14, 28, 0.95));
+  border: 1.5px solid rgba(0, 240, 255, 0.35);
+  border-radius: 16px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
   text-align: center;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
 }
 
 .code-label {
   display: block;
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--neon-green);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #34d399;
   letter-spacing: 1px;
   margin-bottom: 4px;
+  text-transform: uppercase;
 }
 
 .code-val-box {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 4px;
 }
 
 .code-number {
   font-family: var(--font-display);
-  font-size: 2rem;
+  font-size: 2.2rem;
   font-weight: 900;
-  letter-spacing: 3px;
-  color: var(--neon-gold);
-  text-shadow: 0 0 14px rgba(255, 183, 0, 0.6);
+  letter-spacing: 5px;
+  color: #ffcc00;
+  text-shadow: 0 0 16px rgba(255, 204, 0, 0.55);
+  white-space: nowrap;
+  line-height: 1;
+  flex: 1;
+  text-align: center;
 }
 
 .copy-code-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid var(--border-glass);
-  color: #fff;
-  border-radius: 8px;
-  padding: 5px 10px;
-  font-size: 0.72rem;
-  font-weight: 700;
+  background: rgba(0, 240, 255, 0.12);
+  border: 1.2px solid rgba(0, 240, 255, 0.35);
+  color: #38bdf8;
+  border-radius: 10px;
+  padding: 0 12px;
+  height: 36px;
+  font-size: 0.76rem;
+  font-weight: 800;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .copy-code-btn:active {
-  background: var(--neon-green);
-  color: #000;
+  background: var(--neon-cyan);
+  color: #080c16;
+  transform: scale(0.95);
 }
 
 /* Doğrudan Web Katılım Linki Bölümü */
 .room-link-box {
-  background: rgba(10, 16, 32, 0.95);
-  border: 1.5px solid rgba(0, 240, 255, 0.4);
-  border-radius: 14px;
-  padding: 12px;
-  margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(14, 20, 38, 0.95), rgba(8, 12, 24, 0.95));
+  border: 1.5px solid rgba(0, 240, 255, 0.3);
+  border-radius: 16px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
   text-align: left;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
 }
 
 .link-label {
@@ -1052,7 +1065,7 @@ html, body {
   font-size: 0.68rem;
   font-weight: 800;
   color: var(--neon-cyan);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
   margin-bottom: 6px;
 }
 
@@ -1064,17 +1077,20 @@ html, body {
 
 .room-link-field {
   flex: 1;
-  background: rgba(0, 0, 0, 0.5);
-  border: 1.2px solid rgba(0, 240, 255, 0.35);
+  background: rgba(4, 8, 18, 0.85);
+  border: 1.2px solid rgba(0, 240, 255, 0.3);
   border-radius: 10px;
-  padding: 9px 10px;
+  padding: 0 12px;
   color: #a5f3fc;
-  font-family: monospace;
-  font-size: 0.75rem;
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  font-weight: 600;
   outline: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  height: 38px;
+  box-sizing: border-box;
   user-select: all;
   -webkit-user-select: all;
 }
@@ -1091,7 +1107,12 @@ html, body {
   font-weight: 800;
   font-size: 0.75rem;
   border-radius: 10px;
-  padding: 8px 12px;
+  padding: 0 12px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.15s ease;
@@ -1100,31 +1121,6 @@ html, body {
   transform: scale(0.95);
   background: var(--neon-cyan);
   color: #080c16;
-}
-
-.share-link-btn {
-  width: 100%;
-  margin-top: 10px;
-  background: linear-gradient(135deg, #7928ca, #ff0080);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 12px;
-  padding: 11px 14px;
-  color: #fff;
-  font-family: var(--font-main);
-  font-size: 0.84rem;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  box-shadow: 0 4px 18px rgba(255, 0, 128, 0.4);
-  transition: transform 0.15s ease, filter 0.15s ease;
-}
-.share-link-btn:active {
-  transform: scale(0.96);
-  filter: brightness(1.25);
 }
 
 .code-tip {
@@ -1442,12 +1438,18 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  background: rgba(14, 22, 42, 0.85);
+  border: 1px solid rgba(0, 240, 255, 0.22);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .option-label {
-  font-size: 0.78rem;
-  color: var(--text-main);
-  font-weight: 600;
+  font-size: 0.82rem;
+  color: #f1f5f9;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 /* Odaya Katıl Formu */
@@ -1743,11 +1745,22 @@ html, body {
   padding-bottom: 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+.modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.modal-title-wrap .modal-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+}
 .modal-title {
   font-family: var(--font-display);
   font-size: 1.25rem;
   color: #fff;
   letter-spacing: 0.8px;
+  margin: 0;
+  line-height: 1.2;
 }
 .modal-desc {
   font-size: 0.78rem;
